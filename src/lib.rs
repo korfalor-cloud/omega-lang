@@ -1,0 +1,21 @@
+pub mod lexer;
+pub mod parser;
+pub mod semantic;
+pub mod compiler;
+pub mod vm;
+pub mod gc;
+pub mod types;
+pub mod stdlib;
+pub mod ast;
+pub mod errors;
+pub mod diagnostics;
+pub mod utils;
+pub mod optimizer;
+pub mod ir;
+pub mod debugger;
+pub mod profiler;
+pub mod jit;
+pub mod linter;
+pub mod docgen;
+
+pub use errors::{OmegaError, OmegaResult};

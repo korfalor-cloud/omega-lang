@@ -1,0 +1,71 @@
+// Fibonacci sequence in Omega
+// Demonstrates functions, recursion, and iteration
+
+// Recursive fibonacci
+fn fib_recursive(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib_recursive(n - 1) + fib_recursive(n - 2)
+}
+
+// Iterative fibonacci
+fn fib_iterative(n) {
+    if n <= 1 {
+        return n
+    }
+    let a = 0
+    let b = 1
+    for i in 2..=n {
+        let temp = a + b
+        a = b
+        b = temp
+    }
+    return b
+}
+
+// Fibonacci with memoization
+fn fib_memo(n) {
+    let memo = {}
+    fn fib(n, memo) {
+        if n in memo {
+            return memo[n]
+        }
+        if n <= 1 {
+            return n
+        }
+        memo[n] = fib(n - 1, memo) + fib(n - 2, memo)
+        return memo[n]
+    }
+    return fib(n, memo)
+}
+
+// Print first 20 fibonacci numbers
+println("Fibonacci Sequence:")
+println("===================")
+
+for i in 0..20 {
+    let result = fib_iterative(i)
+    println("fib({}) = {}", i, result)
+}
+
+// Benchmark comparison
+println("\nBenchmark:")
+println("----------")
+
+let n = 30
+
+let start = now()
+let result1 = fib_recursive(n)
+let time1 = now() - start
+println("Recursive fib({}) = {} (took {}ms)", n, result1, time1)
+
+let start = now()
+let result2 = fib_iterative(n)
+let time2 = now() - start
+println("Iterative fib({}) = {} (took {}ms)", n, result2, time2)
+
+let start = now()
+let result3 = fib_memo(n)
+let time3 = now() - start
+println("Memoized fib({}) = {} (took {}ms)", n, result3, time3)

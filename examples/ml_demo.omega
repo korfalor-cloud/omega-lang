@@ -1,0 +1,184 @@
+// Machine learning examples in Omega
+
+use std::ml
+use std::ml::linear_regression
+use std::ml::logistic_regression
+use std::ml::knn
+use std::ml::decision_tree
+use std::ml::kmeans
+use std::ml::naive_bayes
+use std::ml::neural_network
+use std::ml::pca
+
+fn main() {
+    println("=== Machine Learning Demos ===")
+
+    // Linear Regression
+    println("\n--- Linear Regression ---")
+    let x = [[1.0], [2.0], [3.0], [4.0], [5.0]]
+    let y = [2.0, 4.0, 6.0, 8.0, 10.0]
+
+    let mut lr = LinearRegression::new()
+        .learning_rate(0.01)
+        .epochs(5000)
+    lr.fit(&x, &y)
+
+    let predictions = lr.predict(&[[6.0], [7.0]])
+    println("Predictions for [6, 7]: {:?}", predictions)
+    println("R² score: {:.4}", lr.r_squared(&x, &y))
+    println("RMSE: {:.4}", lr.rmse(&x, &y))
+
+    // With regularization
+    let mut lr_l2 = LinearRegression::new()
+        .learning_rate(0.01)
+        .epochs(5000)
+        .l2_regularization(0.01)
+    lr_l2.fit(&x, &y)
+    println("L2 weights: {:?}", lr_l2.weights())
+
+    // Logistic Regression
+    println("\n--- Logistic Regression ---")
+    let x = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]]
+    let y = [0.0, 0.0, 0.0, 1.0]
+
+    let mut log_reg = LogisticRegression::new()
+        .learning_rate(0.5)
+        .epochs(5000)
+    log_reg.fit(&x, &y)
+
+    let predictions = log_reg.predict(&x)
+    println("AND gate predictions: {:?}", predictions)
+    println("Accuracy: {:.2}", log_reg.accuracy(&x, &y))
+    println("F1 score: {:.2}", log_reg.f1_score(&x, &y))
+
+    // KNN
+    println("\n--- K-Nearest Neighbors ---")
+    let x = [[0.0, 0.0], [1.0, 1.0], [0.0, 1.0], [1.0, 0.0], [5.0, 5.0], [6.0, 6.0]]
+    let y = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+
+    let mut knn = KNN::new(3)
+    knn.fit(&x, &y)
+
+    let predictions = knn.predict(&[[0.5, 0.5], [5.5, 5.5]])
+    println("KNN predictions: {:?}", predictions)
+    println("LOOCV score: {:.2}", knn.leave_one_out_cv(&x, &y))
+
+    // Weighted KNN
+    let mut knn_weighted = KNN::new(3).weighted(true)
+    knn_weighted.fit(&x, &y)
+    println("Weighted KNN predictions: {:?}", knn_weighted.predict(&[[0.5, 0.5]]))
+
+    // Decision Tree
+    println("\n--- Decision Tree ---")
+    let x = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]]
+    let y = [0.0, 1.0, 1.0, 0.0]
+
+    let mut tree = DecisionTree::new()
+        .max_depth(5)
+        .criterion(SplitCriterion::Entropy)
+    tree.fit(&x, &y)
+
+    let predictions = tree.predict(&x)
+    println("XOR predictions: {:?}", predictions)
+    println("Accuracy: {:.2}", tree.accuracy(&x, &y))
+    println("Feature importance: {:?}", tree.feature_importance())
+    println("Tree depth: {}", tree.depth())
+
+    // K-Means
+    println("\n--- K-Means Clustering ---")
+    let x = [
+        [0.0, 0.0], [0.1, 0.1], [0.2, 0.0],
+        [5.0, 5.0], [5.1, 5.1], [5.0, 5.2],
+        [10.0, 0.0], [10.1, 0.1], [10.0, 0.2],
+    ]
+
+    let mut kmeans = KMeans::new(3)
+    kmeans.fit(&x)
+
+    println("Labels: {:?}", kmeans.labels())
+    println("Centroids: {:?}", kmeans.centroids())
+    println("Inertia: {:.2}", kmeans.inertia())
+    println("Silhouette score: {:.4}", kmeans.silhouette_score(&x))
+
+    // Elbow method
+    let elbow = KMeans::elbow_method(&x, 5)
+    println("Elbow method results:")
+    for (k, inertia) in elbow {
+        println("  k={}: inertia={:.2}", k, inertia)
+    }
+
+    // Naive Bayes
+    println("\n--- Naive Bayes ---")
+    let x = [
+        [1.0, 1.0], [1.0, 2.0], [2.0, 1.0],
+        [5.0, 5.0], [5.0, 6.0], [6.0, 5.0],
+    ]
+    let y = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+
+    let mut nb = NaiveBayes::new()
+    nb.fit(&x, &y)
+
+    let predictions = nb.predict(&[[1.5, 1.5], [5.5, 5.5]])
+    println("NB predictions: {:?}", predictions)
+    println("NB accuracy: {:.2}", nb.accuracy(&x, &y))
+
+    let probas = nb.predict_proba(&[[3.0, 3.0]])
+    println("Probabilities: {:?}", probas)
+
+    // Neural Network
+    println("\n--- Neural Network ---")
+    let x = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]]
+    let y = [[0.0], [1.0], [1.0], [0.0]]
+
+    let mut nn = NeuralNetwork::new(&[2, 8, 1])
+        .learning_rate(0.5)
+        .epochs(5000)
+        .activation(Activation::Tanh)
+        .output_activation(Activation::Sigmoid)
+    nn.fit(&x, &y)
+
+    let predictions = nn.predict(&x)
+    println("XOR NN predictions: {:?}", predictions)
+    println("Final loss: {:.6}", nn.losses().last())
+
+    // PCA
+    println("\n--- PCA ---")
+    let x = [
+        [1.0, 2.0, 3.0], [2.0, 3.0, 4.0],
+        [3.0, 4.0, 5.0], [4.0, 5.0, 6.0],
+        [5.0, 6.0, 7.0], [6.0, 7.0, 8.0],
+    ]
+
+    let mut pca = PCA::new(2)
+    let transformed = pca.fit_transform(&x)
+
+    println("Transformed shape: {}x{}", transformed.len(), transformed[0].len())
+    println("Explained variance: {:?}", pca.explained_variance_ratio())
+    println("Cumulative variance: {:?}", pca.cumulative_variance())
+    println("Reconstruction error: {:.6}", pca.reconstruction_error(&x))
+
+    // Multi-class neural network
+    println("\n--- Multi-class Neural Network ---")
+    let x = [
+        [1.0, 0.0], [0.0, 1.0], [1.0, 1.0],
+        [-1.0, 0.0], [0.0, -1.0], [-1.0, -1.0],
+    ]
+    let y = [
+        [1.0, 0.0, 0.0], [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0], [0.0, 0.0, 1.0],
+    ]
+
+    let mut nn_multi = NeuralNetwork::new(&[2, 16, 3])
+        .learning_rate(0.1)
+        .epochs(3000)
+        .output_activation(Activation::Softmax)
+    nn_multi.fit(&x, &y)
+
+    let classes = nn_multi.predict_classes(&x)
+    println("Multi-class predictions: {:?}", classes)
+
+    println("\n=== Done ===")
+}
+
+main()

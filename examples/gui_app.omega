@@ -1,0 +1,311 @@
+// GUI application example in Omega
+
+use std::gui
+use std::gui::widget
+use std::gui::layout
+use std::gui::theme
+
+// Todo app with terminal UI
+struct TodoApp {
+    items: [TodoItem],
+    new_item_text: String,
+    selected_index: i64,
+    filter: Filter,
+    theme: Theme,
+}
+
+struct TodoItem {
+    text: String,
+    completed: bool,
+    created_at: DateTime,
+    priority: Priority,
+}
+
+enum Priority {
+    Low,
+    Medium,
+    High,
+}
+
+enum Filter {
+    All,
+    Active,
+    Completed,
+}
+
+impl TodoApp {
+    fn new() -> TodoApp {
+        return TodoApp {
+            items: [],
+            new_item_text: "",
+            selected_index: 0,
+            filter: Filter::All,
+            theme: Theme::dark(),
+        }
+    }
+
+    fn add_item(&mut self, text: String) {
+        self.items.push(TodoItem {
+            text: text,
+            completed: false,
+            created_at: DateTime::now(),
+            priority: Priority::Medium,
+        })
+    }
+
+    fn toggle_item(&mut self, index: i64) {
+        if index >= 0 && index < self.items.len() {
+            self.items[index].completed = !self.items[index].completed
+        }
+    }
+
+    fn remove_item(&mut self, index: i64) {
+        if index >= 0 && index < self.items.len() {
+            self.items.remove(index)
+        }
+    }
+
+    fn filtered_items(&self) -> [TodoItem] {
+        match self.filter {
+            Filter::All => return self.items,
+            Filter::Active => return self.items.filter(|item| !item.completed),
+            Filter::Completed => return self.items.filter(|item| item.completed),
+        }
+    }
+
+    fn render(&self) -> String {
+        let mut output = ""
+
+        // Title
+        output += "╔══════════════════════════════════════╗\n"
+        output += "║           TODO List App              ║\n"
+        output += "╚══════════════════════════════════════╝\n\n"
+
+        // Input field
+        output += "  New task: [" + self.new_item_text + "]\n\n"
+
+        // Filter tabs
+        let all_active = if matches!(self.filter, Filter::All) { "►" } else { " " }
+        let active_active = if matches!(self.filter, Filter::Active) { "►" } else { " " }
+        let completed_active = if matches!(self.filter, Filter::Completed) { "►" } else { " " }
+
+        output += "  {}All  {}Active  {}Completed\n\n".format(all_active, active_active, completed_active)
+
+        // Items
+        let items = self.filtered_items()
+        for (i, item) in items.enumerate() {
+            let checkbox = if item.completed { "☑" } else { "☐" }
+            let selected = if i == self.selected_index { "► " } else { "  " }
+            let priority_icon = match item.priority {
+                Priority::Low => "○",
+                Priority::Medium => "◐",
+                Priority::High => "●",
+            }
+
+            output += "{}{}{} {} {}\n".format(selected, checkbox, priority_icon, item.text, item.created_at.format("%Y-%m-%d"))
+        }
+
+        // Status bar
+        let total = self.items.len()
+        let completed = self.items.filter(|i| i.completed).len()
+        output += "\n──────────────────────────────────────\n"
+        output += "  {}/{} completed".format(completed, total)
+
+        return output
+    }
+}
+
+// Form example
+struct FormApp {
+    fields: [FormField],
+    selected_field: i64,
+    submitted: bool,
+}
+
+struct FormField {
+    label: String,
+    value: String,
+    field_type: FieldType,
+    required: bool,
+}
+
+enum FieldType {
+    Text,
+    Email,
+    Password,
+    Number,
+    TextArea,
+}
+
+impl FormApp {
+    fn new() -> FormApp {
+        return FormApp {
+            fields: [
+                FormField { label: "Name", value: "", field_type: FieldType::Text, required: true },
+                FormField { label: "Email", value: "", field_type: FieldType::Email, required: true },
+                FormField { label: "Password", value: "", field_type: FieldType::Password, required: true },
+                FormField { label: "Age", value: "", field_type: FieldType::Number, required: false },
+                FormField { label: "Bio", value: "", field_type: FieldType::TextArea, required: false },
+            ],
+            selected_field: 0,
+            submitted: false,
+        }
+    }
+
+    fn render(&self) -> String {
+        let mut output = ""
+
+        output += "╔══════════════════════════════════════╗\n"
+        output += "║           Registration Form          ║\n"
+        output += "╚══════════════════════════════════════╝\n\n"
+
+        for (i, field) in self.fields.enumerate() {
+            let selected = if i == self.selected_field { "► " } else { "  " }
+            let required = if field.required { " *" } else { "  " }
+            let value_display = match field.field_type {
+                FieldType::Password => "*".repeat(field.value.len()),
+                _ => field.value,
+            }
+
+            output += "{}{}{}: [{}]\n".format(selected, field.label, required, value_display)
+        }
+
+        output += "\n  [Tab] Next field  [Enter] Submit  [Esc] Cancel\n"
+
+        if self.submitted {
+            output += "\n  ✓ Form submitted successfully!\n"
+        }
+
+        return output
+    }
+
+    fn validate(&self) -> [String] {
+        let mut errors = []
+
+        for field in &self.fields {
+            if field.required && field.value.is_empty() {
+                errors.push("{} is required".format(field.label))
+            }
+
+            if matches!(field.field_type, FieldType::Email) && !field.value.contains("@") {
+                errors.push("Invalid email address")
+            }
+        }
+
+        return errors
+    }
+}
+
+// Dashboard example
+struct Dashboard {
+    widgets: [DashboardWidget],
+    refresh_interval: i64,
+    last_refresh: DateTime,
+}
+
+struct DashboardWidget {
+    title: String,
+    widget_type: DashboardWidgetType,
+    data: Map<String, Any>,
+}
+
+enum DashboardWidgetType {
+    Counter,
+    Chart,
+    Table,
+    Gauge,
+    List,
+}
+
+impl Dashboard {
+    fn new() -> Dashboard {
+        return Dashboard {
+            widgets: [
+                DashboardWidget {
+                    title: "Total Users",
+                    widget_type: DashboardWidgetType::Counter,
+                    data: {"value": 1234, "change": "+5.2%"},
+                },
+                DashboardWidget {
+                    title: "Revenue",
+                    widget_type: DashboardWidgetType::Counter,
+                    data: {"value": 45678, "change": "+12.3%"},
+                },
+                DashboardWidget {
+                    title: "Server Load",
+                    widget_type: DashboardWidgetType::Gauge,
+                    data: {"value": 67, "max": 100, "unit": "%"},
+                },
+                DashboardWidget {
+                    title: "Recent Activity",
+                    widget_type: DashboardWidgetType::List,
+                    data: {"items": ["User A logged in", "Order #123 placed", "Payment received"]},
+                },
+            ],
+            refresh_interval: 30,
+            last_refresh: DateTime::now(),
+        }
+    }
+
+    fn render(&self) -> String {
+        let mut output = ""
+
+        output += "╔══════════════════════════════════════╗\n"
+        output += "║           Dashboard                  ║\n"
+        output += "╚══════════════════════════════════════╝\n\n"
+
+        for widget in &self.widgets {
+            output += "┌─ {} ─────────────────────┐\n".format(widget.title)
+
+            match widget.widget_type {
+                DashboardWidgetType::Counter => {
+                    output += "│  {} {}\n".format(widget.data["value"], widget.data["change"])
+                },
+                DashboardWidgetType::Gauge => {
+                    let value = widget.data["value"] as f64
+                    let max = widget.data["max"] as f64
+                    let pct = (value / max * 20.0) as i64
+                    let bar = "█".repeat(pct) + "░".repeat(20 - pct)
+                    output += "│  [{}] {:.0}%\n".format(bar, value / max * 100.0)
+                },
+                DashboardWidgetType::List => {
+                    for item in widget.data["items"] {
+                        output += "│  • {}\n".format(item)
+                    }
+                },
+                _ => {
+                    output += "│  [Widget]\n"
+                }
+            }
+
+            output += "└────────────────────────────┘\n"
+        }
+
+        return output
+    }
+}
+
+fn main() {
+    println("=== GUI Examples ===")
+
+    // Todo app
+    println("\n--- Todo App ---")
+    let mut todo = TodoApp::new()
+    todo.add_item("Buy groceries")
+    todo.add_item("Write code")
+    todo.add_item("Read book")
+    todo.toggle_item(1)
+    println(todo.render())
+
+    // Form
+    println("\n--- Registration Form ---")
+    let form = FormApp::new()
+    println(form.render())
+
+    // Dashboard
+    println("\n--- Dashboard ---")
+    let dashboard = Dashboard::new()
+    println(dashboard.render())
+}
+
+main()

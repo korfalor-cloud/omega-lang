@@ -1,0 +1,279 @@
+// Game engine example in Omega
+
+use std::game
+use std::game::ecs
+use std::game::physics
+use std::game::input
+use std::game::audio
+
+// Define components
+struct Position {
+    x: f64,
+    y: f64,
+}
+
+struct Velocity {
+    dx: f64,
+    dy: f64,
+}
+
+struct Sprite {
+    width: f64,
+    height: f64,
+    color: String,
+}
+
+struct Health {
+    current: f64,
+    max: f64,
+}
+
+struct Player {
+    speed: f64,
+    jump_force: f64,
+    grounded: bool,
+}
+
+struct Enemy {
+    patrol_range: f64,
+    speed: f64,
+    direction: f64,
+}
+
+struct Projectile {
+    damage: f64,
+    lifetime: f64,
+    owner: Entity,
+}
+
+// Game state
+struct GameState {
+    world: World,
+    physics: PhysicsEngine,
+    input: InputManager,
+    audio: AudioEngine,
+    score: i64,
+    lives: i64,
+    level: i64,
+    paused: bool,
+}
+
+impl GameState {
+    fn new() -> GameState {
+        let mut state = GameState {
+            world: World::new(),
+            physics: PhysicsEngine::new(),
+            input: InputManager::new(),
+            audio: AudioEngine::new(),
+            score: 0,
+            lives: 3,
+            level: 1,
+            paused: false,
+        }
+
+        state.setup()
+        return state
+    }
+
+    fn setup(&mut self) {
+        // Setup input mappings
+        self.input.register_axis("horizontal", [Key::D], [Key::A])
+        self.input.register_axis("vertical", [Key::W], [Key::S])
+        self.input.register_action("jump", [Key::Space])
+        self.input.register_action("shoot", [Key::F])
+
+        // Setup physics
+        self.physics.set_gravity(0.0, 500.0)
+
+        // Create player
+        let player = self.world.spawn()
+        self.world.add_component(player, Position { x: 100.0, y: 300.0 })
+        self.world.add_component(player, Velocity { dx: 0.0, dy: 0.0 })
+        self.world.add_component(player, Sprite { width: 32.0, height: 32.0, color: "blue" })
+        self.world.add_component(player, Health { current: 100.0, max: 100.0 })
+        self.world.add_component(player, Player {
+            speed: 200.0,
+            jump_force: 400.0,
+            grounded: false,
+        })
+        self.world.add_tag(player, "player")
+
+        // Create enemies
+        for i in 0..5 {
+            let enemy = self.world.spawn()
+            self.world.add_component(enemy, Position { x: 300.0 + i as f64 * 150.0, y: 300.0 })
+            self.world.add_component(enemy, Velocity { dx: 0.0, dy: 0.0 })
+            self.world.add_component(enemy, Sprite { width: 24.0, height: 24.0, color: "red" })
+            self.world.add_component(enemy, Health { current: 50.0, max: 50.0 })
+            self.world.add_component(enemy, Enemy {
+                patrol_range: 100.0,
+                speed: 50.0,
+                direction: 1.0,
+            })
+            self.world.add_tag(enemy, "enemy")
+        }
+
+        // Create platforms
+        let platforms = [
+            (0.0, 400.0, 800.0, 20.0),
+            (200.0, 300.0, 100.0, 10.0),
+            (400.0, 250.0, 100.0, 10.0),
+            (600.0, 200.0, 100.0, 10.0),
+        ]
+
+        for (x, y, w, h) in platforms {
+            let platform = self.world.spawn()
+            self.world.add_component(platform, Position { x: x, y: y })
+            self.world.add_component(platform, Sprite { width: w, height: h, color: "green" })
+            self.world.add_tag(platform, "platform")
+            self.physics.add_body(RigidBody::static_body(), Collider::Rectangle { width: w, height: h })
+        }
+    }
+
+    fn update(&mut self, dt: f64) {
+        if self.paused {
+            return
+        }
+
+        // Update input
+        self.input.update()
+
+        // Player movement
+        let horizontal = self.input.get_axis("horizontal")
+        let entities = self.world.query::<Player>()
+        for (entity, player) in entities {
+            if let Some(vel) = self.world.get_component_mut::<Velocity>(entity) {
+                vel.dx = horizontal * player.speed
+            }
+
+            if self.input.is_action_pressed("jump") && player.grounded {
+                if let Some(vel) = self.world.get_component_mut::<Velocity>(entity) {
+                    vel.dy = -player.jump_force
+                }
+            }
+        }
+
+        // Enemy AI
+        let enemies = self.world.query::<Enemy>()
+        for (entity, enemy) in enemies {
+            if let Some(pos) = self.world.get_component::<Position>(entity) {
+                let new_dx = enemy.speed * enemy.direction
+                if let Some(vel) = self.world.get_component_mut::<Velocity>(entity) {
+                    vel.dx = new_dx
+                }
+            }
+        }
+
+        // Update physics
+        self.physics.step(dt)
+
+        // Sync physics to ECS
+        for i in 0..self.physics.body_count() {
+            if let Some(body) = self.physics.get_body(i) {
+                // Update positions from physics
+            }
+        }
+
+        // Collision detection
+        let collisions = self.physics.collisions()
+        for collision in collisions {
+            self.handle_collision(collision)
+        }
+
+        // Cleanup dead entities
+        let dead: Vec<Entity> = self.world.query::<Health>()
+            .filter(|(_, h)| !h.is_alive())
+            .map(|(e, _)| e)
+            .collect()
+
+        for entity in dead {
+            if self.world.has_tag(entity, "enemy") {
+                self.score += 100
+            }
+            self.world.despawn(entity)
+        }
+        self.world.flush()
+
+        // Check game over
+        let player_alive = self.world.query_with_tag::<Health>("player")
+            .iter()
+            .any(|(_, h)| h.is_alive())
+
+        if !player_alive {
+            self.lives -= 1
+            if self.lives <= 0 {
+                self.game_over()
+            } else {
+                self.respawn_player()
+            }
+        }
+    }
+
+    fn handle_collision(&mut self, collision: &Collision) {
+        // Handle player-enemy collision
+        // Handle player-platform collision
+        // Handle projectile-enemy collision
+    }
+
+    fn shoot(&mut self) {
+        let players = self.world.query_with_tag::<Player>("player")
+        for (entity, _) in players {
+            if let Some(pos) = self.world.get_component::<Position>(entity) {
+                let projectile = self.world.spawn()
+                self.world.add_component(projectile, Position { x: pos.x + 16.0, y: pos.y })
+                self.world.add_component(projectile, Velocity { dx: 500.0, dy: 0.0 })
+                self.world.add_component(projectile, Sprite { width: 8.0, height: 4.0, color: "yellow" })
+                self.world.add_component(projectile, Projectile {
+                    damage: 25.0,
+                    lifetime: 2.0,
+                    owner: entity,
+                })
+                self.world.add_tag(projectile, "projectile")
+            }
+        }
+    }
+
+    fn respawn_player(&mut self) {
+        let player = self.world.spawn()
+        self.world.add_component(player, Position { x: 100.0, y: 300.0 })
+        self.world.add_component(player, Velocity { dx: 0.0, dy: 0.0 })
+        self.world.add_component(player, Sprite { width: 32.0, height: 32.0, color: "blue" })
+        self.world.add_component(player, Health { current: 100.0, max: 100.0 })
+        self.world.add_component(player, Player {
+            speed: 200.0,
+            jump_force: 400.0,
+            grounded: false,
+        })
+        self.world.add_tag(player, "player")
+    }
+
+    fn game_over(&mut self) {
+        println("Game Over! Score: {}", self.score)
+        self.paused = true
+    }
+
+    fn next_level(&mut self) {
+        self.level += 1
+        // Spawn more enemies, etc.
+    }
+}
+
+fn main() {
+    println("=== Game Engine Example ===")
+
+    let mut game = GameState::new()
+
+    // Game loop simulation
+    let dt = 1.0 / 60.0
+    for frame in 0..300 {
+        game.update(dt)
+
+        if frame % 60 == 0 {
+            println("Frame {}: Score={}, Lives={}", frame, game.score, game.lives)
+        }
+    }
+
+    println("Final Score: {}", game.score)
+}
+
+main()

@@ -1,0 +1,275 @@
+// Web crawler implementation in Omega
+
+use std::collections
+use std::http
+
+struct Crawler {
+    visited: Map<String, bool>,
+    queue: [String],
+    max_depth: i64,
+    max_pages: i64,
+    delay_ms: i64,
+    user_agent: String,
+    on_page: fn(String, Page) -> void,
+}
+
+struct Page {
+    url: String,
+    title: String,
+    links: [String],
+    text: String,
+    status: i64,
+    content_type: String,
+}
+
+impl Crawler {
+    fn new(options: Map<String, Any>) -> Crawler {
+        return Crawler {
+            visited: {},
+            queue: [],
+            max_depth: options.get("max_depth", 3),
+            max_pages: options.get("max_pages", 100),
+            delay_ms: options.get("delay_ms", 1000),
+            user_agent: options.get("user_agent", "OmegaBot/1.0"),
+            on_page: options.get("on_page", |url, page| {}),
+        }
+    }
+
+    async fn crawl(&mut self, start_url: String) -> [Page] {
+        self.queue.push(start_url)
+        let pages = []
+
+        while self.queue.len() > 0 && pages.len() < self.max_pages {
+            let url = self.queue.remove(0)
+
+            if self.visited.has(url) {
+                continue
+            }
+
+            self.visited[url] = true
+
+            try {
+                let page = await self.fetch_page(url)
+                pages.push(page)
+
+                for link in page.links {
+                    if !self.visited.has(link) {
+                        self.queue.push(link)
+                    }
+                }
+
+                self.on_page(url, page)
+            } catch (e) {
+                println("Error crawling {}: {}", url, e)
+            }
+
+            await sleep(self.delay_ms)
+        }
+
+        return pages
+    }
+
+    async fn fetch_page(&self, url: String) -> Page {
+        let response = await http.get(url, {
+            "headers": {
+                "User-Agent": self.user_agent,
+            },
+            "timeout": 30000,
+        })
+
+        let html = response.body()
+        let links = self.extract_links(html, url)
+        let title = self.extract_title(html)
+        let text = self.extract_text(html)
+
+        return Page {
+            url: url,
+            title: title,
+            links: links,
+            text: text,
+            status: response.status(),
+            content_type: response.header("Content-Type"),
+        }
+    }
+
+    fn extract_links(&self, html: String, base_url: String) -> [String] {
+        let links = []
+        let regex = Regex::new(r#"href=["']([^"']+)["']"#)
+
+        for match in regex.find_all(html) {
+            let url = self.resolve_url(match, base_url)
+            if url.starts_with("http") {
+                links.push(url)
+            }
+        }
+
+        return links
+    }
+
+    fn extract_title(&self, html: String) -> String {
+        let regex = Regex::new(r#"<title>([^<]+)</title>"#)
+        let match = regex.find(html)
+        return match.unwrap_or("Untitled")
+    }
+
+    fn extract_text(&self, html: String) -> String {
+        let text = html
+        text = Regex::new(r"<[^>]+>").replace_all(text, "")
+        text = Regex::new(r"\s+").replace_all(text, " ")
+        return text.trim()
+    }
+
+    fn resolve_url(&self, url: String, base_url: String) -> String {
+        if url.starts_with("http") {
+            return url
+        }
+        if url.starts_with("//") {
+            return "https:" + url
+        }
+        if url.starts_with("/") {
+            let base = Url::parse(base_url)
+            return base.scheme() + "://" + base.host() + url
+        }
+        return base_url + "/" + url
+    }
+}
+
+// Sitemap generator
+struct Sitemap {
+    entries: [SitemapEntry],
+}
+
+struct SitemapEntry {
+    url: String,
+    last_modified: String,
+    change_frequency: String,
+    priority: f64,
+}
+
+impl Sitemap {
+    fn new() -> Sitemap {
+        return Sitemap { entries: [] }
+    }
+
+    fn add(&mut self, url: String, options: Map<String, Any>) {
+        self.entries.push(SitemapEntry {
+            url: url,
+            last_modified: options.get("last_modified", DateTime::now().format_iso8601()),
+            change_frequency: options.get("change_frequency", "monthly"),
+            priority: options.get("priority", 0.5),
+        })
+    }
+
+    fn to_xml(&self) -> String {
+        let xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        xml += "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
+
+        for entry in self.entries {
+            xml += "  <url>\n"
+            xml += "    <loc>" + entry.url + "</loc>\n"
+            xml += "    <lastmod>" + entry.last_modified + "</lastmod>\n"
+            xml += "    <changefreq>" + entry.change_frequency + "</changefreq>\n"
+            xml += "    <priority>" + entry.priority + "</priority>\n"
+            xml += "  </url>\n"
+        }
+
+        xml += "</urlset>"
+        return xml
+    }
+
+    fn save(&self, path: String) {
+        File.write(path, self.to_xml())
+    }
+}
+
+// Link checker
+async fn check_links(url: String) -> Map<String, bool> {
+    let crawler = Crawler::new({
+        "max_depth": 1,
+        "max_pages": 10,
+    })
+
+    let page = await crawler.fetch_page(url)
+    let results = {}
+
+    for link in page.links {
+        try {
+            let response = await http.head(link)
+            results[link] = response.status() == 200
+        } catch (e) {
+            results[link] = false
+        }
+    }
+
+    return results
+}
+
+// Page rank calculation
+fn calculate_pagerank(pages: Map<String, [String]>, iterations: i64) -> Map<String, f64> {
+    let n = pages.len()
+    let damping = 0.85
+    let ranks = {}
+
+    // Initialize
+    for url in pages.keys() {
+        ranks[url] = 1.0 / n
+    }
+
+    // Iterate
+    for i in 0..iterations {
+        let new_ranks = {}
+
+        for url in pages.keys() {
+            let rank_sum = 0.0
+
+            for other_url in pages.keys() {
+                if pages[other_url].contains(url) {
+                    rank_sum += ranks[other_url] / pages[other_url].len()
+                }
+            }
+
+            new_ranks[url] = (1.0 - damping) / n + damping * rank_sum
+        }
+
+        ranks = new_ranks
+    }
+
+    return ranks
+}
+
+async fn main() {
+    println("=== Web Crawler ===")
+
+    let crawler = Crawler::new({
+        "max_depth": 2,
+        "max_pages": 50,
+        "delay_ms": 500,
+        "on_page": |url, page| {
+            println("Crawled: {} ({})", page.title, url)
+        },
+    })
+
+    let pages = await crawler.crawl("https://example.com")
+    println("Crawled {} pages", pages.len())
+
+    println("\n=== Sitemap Generator ===")
+    let sitemap = Sitemap::new()
+    sitemap.add("https://example.com", {"priority": 1.0})
+    sitemap.add("https://example.com/about", {"priority": 0.8})
+    sitemap.add("https://example.com/contact", {"priority": 0.6})
+    println(sitemap.to_xml())
+
+    println("\n=== PageRank ===")
+    let pages = {
+        "A": ["B", "C"],
+        "B": ["C"],
+        "C": ["A"],
+        "D": ["C"],
+    }
+    let ranks = calculate_pagerank(pages, 10)
+    for (url, rank) in ranks {
+        println("{}: {:.4}", url, rank)
+    }
+}
+
+main()

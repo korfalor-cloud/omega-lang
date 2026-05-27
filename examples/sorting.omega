@@ -1,0 +1,204 @@
+// Sorting algorithms implementation in Omega
+
+fn bubble_sort(arr: [i64]) -> [i64] {
+    let n = arr.len()
+    for i in 0..n {
+        for j in 0..(n - i - 1) {
+            if arr[j] > arr[j + 1] {
+                let temp = arr[j]
+                arr[j] = arr[j + 1]
+                arr[j + 1] = temp
+            }
+        }
+    }
+    return arr
+}
+
+fn selection_sort(arr: [i64]) -> [i64] {
+    let n = arr.len()
+    for i in 0..n {
+        let min_idx = i
+        for j in (i + 1)..n {
+            if arr[j] < arr[min_idx] {
+                min_idx = j
+            }
+        }
+        let temp = arr[i]
+        arr[i] = arr[min_idx]
+        arr[min_idx] = temp
+    }
+    return arr
+}
+
+fn insertion_sort(arr: [i64]) -> [i64] {
+    let n = arr.len()
+    for i in 1..n {
+        let key = arr[i]
+        let j = i - 1
+        while j >= 0 && arr[j] > key {
+            arr[j + 1] = arr[j]
+            j -= 1
+        }
+        arr[j + 1] = key
+    }
+    return arr
+}
+
+fn merge_sort(arr: [i64]) -> [i64] {
+    if arr.len() <= 1 {
+        return arr
+    }
+
+    let mid = arr.len() / 2
+    let left = merge_sort(arr[0..mid])
+    let right = merge_sort(arr[mid..arr.len()])
+
+    return merge(left, right)
+}
+
+fn merge(left: [i64], right: [i64]) -> [i64] {
+    let result = []
+    let i = 0
+    let j = 0
+
+    while i < left.len() && j < right.len() {
+        if left[i] <= right[j] {
+            result.push(left[i])
+            i += 1
+        } else {
+            result.push(right[j])
+            j += 1
+        }
+    }
+
+    while i < left.len() {
+        result.push(left[i])
+        i += 1
+    }
+
+    while j < right.len() {
+        result.push(right[j])
+        j += 1
+    }
+
+    return result
+}
+
+fn quick_sort(arr: [i64]) -> [i64] {
+    if arr.len() <= 1 {
+        return arr
+    }
+
+    let pivot = arr[arr.len() / 2]
+    let left = []
+    let middle = []
+    let right = []
+
+    for x in arr {
+        if x < pivot {
+            left.push(x)
+        } else if x == pivot {
+            middle.push(x)
+        } else {
+            right.push(x)
+        }
+    }
+
+    return [...quick_sort(left), ...middle, ...quick_sort(right)]
+}
+
+fn heap_sort(arr: [i64]) -> [i64] {
+    let n = arr.len()
+
+    // Build max heap
+    for i in (0..n / 2).rev() {
+        heapify(arr, n, i)
+    }
+
+    // Extract elements
+    for i in (1..n).rev() {
+        let temp = arr[0]
+        arr[0] = arr[i]
+        arr[i] = temp
+        heapify(arr, i, 0)
+    }
+
+    return arr
+}
+
+fn heapify(arr: [i64], n: i64, i: i64) {
+    let largest = i
+    let left = 2 * i + 1
+    let right = 2 * i + 2
+
+    if left < n && arr[left] > arr[largest] {
+        largest = left
+    }
+
+    if right < n && arr[right] > arr[largest] {
+        largest = right
+    }
+
+    if largest != i {
+        let temp = arr[i]
+        arr[i] = arr[largest]
+        arr[largest] = temp
+        heapify(arr, n, largest)
+    }
+}
+
+fn count_sort(arr: [i64]) -> [i64] {
+    if arr.len() == 0 {
+        return arr
+    }
+
+    let max = arr[0]
+    for x in arr {
+        if x > max {
+            max = x
+        }
+    }
+
+    let count = []
+    for i in 0..(max + 1) {
+        count.push(0)
+    }
+
+    for x in arr {
+        count[x] += 1
+    }
+
+    let result = []
+    for i in 0..(max + 1) {
+        for j in 0..count[i] {
+            result.push(i)
+        }
+    }
+
+    return result
+}
+
+fn main() {
+    let arr = [64, 34, 25, 12, 22, 11, 90]
+    println("Original: {}", arr)
+
+    let sorted = bubble_sort(arr)
+    println("Bubble sort: {}", sorted)
+
+    let sorted = selection_sort(arr)
+    println("Selection sort: {}", sorted)
+
+    let sorted = insertion_sort(arr)
+    println("Insertion sort: {}", sorted)
+
+    let sorted = merge_sort(arr)
+    println("Merge sort: {}", sorted)
+
+    let sorted = quick_sort(arr)
+    println("Quick sort: {}", sorted)
+
+    let sorted = heap_sort(arr)
+    println("Heap sort: {}", sorted)
+}
+
+main()

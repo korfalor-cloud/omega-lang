@@ -1,0 +1,101 @@
+// Concurrency in Omega
+// Demonstrates threads, channels, and synchronization
+
+use std::thread
+use std::channel
+use std::mutex
+use std::time
+
+// Basic thread spawning
+println("Thread Basics:")
+println("==============")
+
+let handle = thread::spawn(|| {
+    println("Hello from thread!")
+    return 42
+})
+
+handle.join()
+println("Thread completed")
+
+// Channels for communication
+println("\nChannel Communication:")
+println("=====================")
+
+let (tx, rx) = channel::channel()
+
+thread::spawn(|| {
+    for i in 0..5 {
+        tx.send(i)
+        thread::sleep_ms(100)
+    }
+    tx.send(-1) // Signal completion
+})
+
+loop {
+    let value = rx.recv()
+    if value == -1 {
+        break
+    }
+    println("Received: {}", value)
+}
+
+// Mutex for shared state
+println("\nMutex Synchronization:")
+println("=====================")
+
+let counter = Mutex::new(0)
+let mut handles = []
+
+for i in 0..10 {
+    let handle = thread::spawn(|| {
+        for _ in 0..100 {
+            let mut count = counter.lock()
+            *count += 1
+        }
+    })
+    handles.push(handle)
+}
+
+for handle in handles {
+    handle.join()
+}
+
+println("Counter: {}", *counter.lock())
+
+// Producer-consumer pattern
+println("\nProducer-Consumer:")
+println("==================")
+
+let buffer = Mutex::new([])
+let (tx, rx) = channel::channel()
+let done = Mutex::new(false)
+
+// Producer
+thread::spawn(|| {
+    for i in 0..10 {
+        let mut buf = buffer.lock()
+        buf.push(i)
+        println!("Produced: {}", i)
+        thread::sleep_ms(50)
+    }
+    tx.send(1) // Signal done
+})
+
+// Consumer
+thread::spawn(|| {
+    loop {
+        let mut buf = buffer.lock()
+        if buf.len() > 0 {
+            let value = buf.remove(0)
+            println!("Consumed: {}", value)
+        }
+        if rx.try_recv().is_ok() {
+            break
+        }
+        thread::sleep_ms(30)
+    }
+})
+
+thread::sleep_ms(1000)
+println("Producer-consumer complete")

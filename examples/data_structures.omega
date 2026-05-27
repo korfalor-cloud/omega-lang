@@ -1,0 +1,155 @@
+// Data structures in Omega
+// Demonstrates arrays, maps, sets, and custom structures
+
+// Array operations
+println("Array Operations:")
+println("=================")
+
+let numbers = [5, 3, 8, 1, 9, 2, 7, 4, 6]
+println("Original: {}", numbers)
+println("Length: {}", numbers.len())
+println("Sum: {}", numbers.sum())
+println("Min: {}", numbers.min())
+println("Max: {}", numbers.max())
+
+// Sorting
+let sorted = numbers.sort()
+println("Sorted: {}", sorted)
+
+// Filtering
+let evens = numbers.filter(|x| x % 2 == 0)
+println("Evens: {}", evens)
+
+// Mapping
+let doubled = numbers.map(|x| x * 2)
+println("Doubled: {}", doubled)
+
+// Map operations
+println("\nMap Operations:")
+println("===============")
+
+let person = {
+    "name": "Alice",
+    "age": 30,
+    "city": "New York"
+}
+println("Person: {}", person)
+println("Name: {}", person["name"])
+
+// Set operations
+println("\nSet Operations:")
+println("===============")
+
+let set1 = {1, 2, 3, 4, 5}
+let set2 = {4, 5, 6, 7, 8}
+println("Set 1: {}", set1)
+println("Set 2: {}", set2)
+
+// Struct definition
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+    fn new(x, y) -> Point {
+        return Point { x: x, y: y }
+    }
+
+    fn distance(other) -> f64 {
+        let dx = self.x - other.x
+        let dy = self.y - other.y
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    fn midpoint(other) -> Point {
+        return Point {
+            x: (self.x + other.x) / 2.0,
+            y: (self.y + other.y) / 2.0
+        }
+    }
+
+    fn to_string() -> String {
+        return format("({}, {})", self.x, self.y)
+    }
+}
+
+let p1 = Point::new(0.0, 0.0)
+let p2 = Point::new(3.0, 4.0)
+println("\nPoint 1: {}", p1.to_string())
+println("Point 2: {}", p2.to_string())
+println("Distance: {}", p1.distance(p2))
+
+// Enum definition
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Custom(u8, u8, u8),
+}
+
+impl Color {
+    fn to_string() -> String {
+        match self {
+            Color::Red => return "Red",
+            Color::Green => return "Green",
+            Color::Blue => return "Blue",
+            Color::Custom(r, g, b) => return format("RGB({}, {}, {})", r, g, b),
+        }
+    }
+}
+
+let color = Color::Custom(255, 128, 0)
+println("\nColor: {}", color.to_string())
+
+// Linked list implementation
+struct Node {
+    value: i64,
+    next: Option<Node>,
+}
+
+struct LinkedList {
+    head: Option<Node>,
+    size: usize,
+}
+
+impl LinkedList {
+    fn new() -> LinkedList {
+        return LinkedList { head: none, size: 0 }
+    }
+
+    fn push_front(value) {
+        self.head = Some(Node {
+            value: value,
+            next: self.head,
+        })
+        self.size += 1
+    }
+
+    fn pop_front() -> Option<i64> {
+        if self.head.is_none() {
+            return none
+        }
+        let node = self.head.unwrap()
+        self.head = node.next
+        self.size -= 1
+        return Some(node.value)
+    }
+
+    fn to_vec() -> Vec<i64> {
+        let result = []
+        let current = self.head
+        while current.is_some() {
+            let node = current.unwrap()
+            result.push(node.value)
+            current = node.next
+        }
+        return result
+    }
+}
+
+let list = LinkedList::new()
+list.push_front(3)
+list.push_front(2)
+list.push_front(1)
+println("\nLinked List: {}", list.to_vec())

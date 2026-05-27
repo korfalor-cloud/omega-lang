@@ -1,0 +1,133 @@
+// Pattern matching in Omega
+// Demonstrates match expressions and destructuring
+
+// Basic pattern matching
+println("Basic Pattern Matching:")
+println("======================")
+
+fn describe_number(n) {
+    match n {
+        0 => return "zero",
+        1 => return "one",
+        2 => return "two",
+        3..=9 => return "single digit",
+        10..=99 => return "double digit",
+        _ => return "large number",
+    }
+}
+
+for i in [0, 1, 5, 42, 100] {
+    println("{} is {}", i, describe_number(i))
+}
+
+// Matching on types
+println("\nType Matching:")
+println("=============")
+
+fn process_value(value) {
+    match value {
+        n if is_integer(n) => println("Integer: {}", n),
+        f if is_float(f) => println("Float: {}", f),
+        s if is_string(s) => println("String: {}", s),
+        b if is_bool(b) => println("Bool: {}", b),
+        _ => println("Unknown type"),
+    }
+}
+
+process_value(42)
+process_value(3.14)
+process_value("hello")
+process_value(true)
+
+// Destructuring structs
+println("\nStruct Destructuring:")
+println("====================")
+
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+let p = Point { x: 3.0, y: 4.0 }
+let Point { x, y } = p
+println("x={}, y={}", x, y)
+
+// Destructuring tuples
+println("\nTuple Destructuring:")
+println("===================")
+
+let tuple = (1, "hello", true)
+let (num, text, flag) = tuple
+println("num={}, text={}, flag={}", num, text, flag)
+
+// Destructuring arrays
+println("\nArray Destructuring:")
+println("===================")
+
+let arr = [1, 2, 3, 4, 5]
+let [first, second, ..rest] = arr
+println("first={}, second={}, rest={}", first, second, rest)
+
+// Enum pattern matching
+println("\nEnum Matching:")
+println("=============")
+
+enum Shape {
+    Circle(f64),
+    Rectangle(f64, f64),
+    Triangle(f64, f64, f64),
+}
+
+fn area(shape) -> f64 {
+    match shape {
+        Shape::Circle(r) => return 3.14159 * r * r,
+        Shape::Rectangle(w, h) => return w * h,
+        Shape::Triangle(a, b, c) => {
+            let s = (a + b + c) / 2.0
+            return sqrt(s * (s - a) * (s - b) * (s - c))
+        }
+    }
+}
+
+let shapes = [
+    Shape::Circle(5.0),
+    Shape::Rectangle(4.0, 6.0),
+    Shape::Triangle(3.0, 4.0, 5.0),
+]
+
+for shape in shapes {
+    println("Area: {}", area(shape))
+}
+
+// Guard clauses
+println("\nGuard Clauses:")
+println("==============")
+
+fn classify(n) {
+    match n {
+        x if x < 0 => println("{} is negative", n),
+        0 => println("zero"),
+        x if x % 2 == 0 => println("{} is positive even", n),
+        _ => println("{} is positive odd", n),
+    }
+}
+
+for i in [-5, 0, 3, 8] {
+    classify(i)
+}
+
+// Pattern matching in function params
+println("\nFunction Param Patterns:")
+println("========================")
+
+fn sum_pair((a, b)) {
+    return a + b
+}
+
+println("Sum of (3, 4) = {}", sum_pair((3, 4)))
+
+fn greet({ name, age }) {
+    println("Hello, {}! You are {} years old.", name, age)
+}
+
+greet({ name: "Alice", age: 30 })

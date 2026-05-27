@@ -1,0 +1,109 @@
+// Testing in Omega
+// Demonstrates the built-in test framework
+
+test "basic arithmetic" {
+    assert_eq(1 + 1, 2)
+    assert_eq(2 * 3, 6)
+    assert_eq(10 / 2, 5)
+    assert_eq(10 % 3, 1)
+}
+
+test "string operations" {
+    let s = "Hello, World!"
+    assert_eq(s.len(), 13)
+    assert(s.starts_with("Hello"))
+    assert(s.ends_with("!"))
+    assert(s.contains("World"))
+    assert_eq(s.to_upper(), "HELLO, WORLD!")
+}
+
+test "array operations" {
+    let arr = [3, 1, 4, 1, 5, 9]
+    assert_eq(arr.len(), 6)
+    assert_eq(arr.first(), 3)
+    assert_eq(arr.last(), 9)
+    assert(arr.contains(4))
+    assert(!arr.contains(7))
+}
+
+test "comparison operators" {
+    assert_eq(5, 5)
+    assert_ne(5, 6)
+    assert_lt(3, 5)
+    assert_le(5, 5)
+    assert_gt(7, 3)
+    assert_ge(5, 5)
+}
+
+test "floating point comparison" {
+    assert_approx_eq(3.14159, 3.14160, 0.001)
+    assert_approx_eq(1.0 / 3.0, 0.33333, 0.0001)
+}
+
+test "error handling" {
+    assert_panics(|| {
+        throw "Expected error"
+    })
+}
+
+test "with timeout" timeout=1000 {
+    // This test has a 1 second timeout
+    let sum = 0
+    for i in 0..1000 {
+        sum += i
+    }
+    assert_eq(sum, 499500)
+}
+
+test "with tags" tags=["unit", "math"] {
+    assert_eq(gcd(12, 8), 4)
+    assert_eq(lcm(12, 8), 24)
+    assert(is_prime(17))
+    assert(!is_prime(15))
+}
+
+// Custom test helper
+fn assert_throws(f, expected_message) {
+    try {
+        f()
+        assert(false, "Expected exception but none was thrown")
+    } catch (e) {
+        assert(e.contains(expected_message), format("Expected '{}', got '{}'", expected_message, e))
+    }
+}
+
+test "custom assertion" {
+    assert_throws(
+        || throw "Invalid input",
+        "Invalid input"
+    )
+}
+
+// Test suite
+struct MathTests {
+    name: "Math Tests",
+}
+
+impl MathTests {
+    test "addition" {
+        assert_eq(self.add(2, 3), 5)
+        assert_eq(self.add(-1, 1), 0)
+        assert_eq(self.add(0, 0), 0)
+    }
+
+    test "subtraction" {
+        assert_eq(self.subtract(5, 3), 2)
+        assert_eq(self.subtract(3, 5), -2)
+    }
+
+    test "multiplication" {
+        assert_eq(self.multiply(3, 4), 12)
+        assert_eq(self.multiply(-2, 3), -6)
+        assert_eq(self.multiply(0, 100), 0)
+    }
+
+    test "division" {
+        assert_eq(self.divide(10, 2), 5)
+        assert_throws(|| self.divide(10, 0), "Division by zero")
+    }
+}

@@ -1,0 +1,437 @@
+// Database-like operations in Omega
+
+struct Table {
+    name: String,
+    columns: [Column],
+    rows: [[Any]],
+}
+
+struct Column {
+    name: String,
+    type_name: String,
+    nullable: bool,
+}
+
+struct Query {
+    table: String,
+    select: [String],
+    where_clauses: [WhereClause],
+    order_by: Option<OrderBy>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    joins: [Join],
+    group_by: [String],
+    having: Option<WhereClause>,
+}
+
+struct WhereClause {
+    column: String,
+    operator: String,
+    value: Any,
+}
+
+struct OrderBy {
+    column: String,
+    ascending: bool,
+}
+
+struct Join {
+    table: String,
+    on: String,
+    join_type: String,
+}
+
+impl Table {
+    fn new(name: String) -> Table {
+        return Table {
+            name: name,
+            columns: [],
+            rows: [],
+        }
+    }
+
+    fn add_column(&mut self, name: String, type_name: String) {
+        self.columns.push(Column {
+            name: name,
+            type_name: type_name,
+            nullable: true,
+        })
+    }
+
+    fn insert(&mut self, values: Map<String, Any>) {
+        let row = []
+        for col in &self.columns {
+            row.push(values.get(col.name, none))
+        }
+        self.rows.push(row)
+    }
+
+    fn select(&self, columns: [String]) -> [[Any]] {
+        let indices = []
+        for col in columns {
+            for (i, c) in self.columns.enumerate() {
+                if c.name == col {
+                    indices.push(i)
+                }
+            }
+        }
+
+        let result = []
+        for row in &self.rows {
+            let selected = []
+            for idx in indices {
+                selected.push(row[idx])
+            }
+            result.push(selected)
+        }
+
+        return result
+    }
+
+    fn where_fn(&self, clause: WhereClause) -> Table {
+        let result = Table::new(self.name)
+        result.columns = self.columns
+
+        for row in &self.rows {
+            if self.matches_clause(row, &clause) {
+                result.rows.push(row)
+            }
+        }
+
+        return result
+    }
+
+    fn matches_clause(&self, row: &[Any], clause: &WhereClause) -> bool {
+        let col_idx = self.find_column(&clause.column)
+        if col_idx.is_none() {
+            return false
+        }
+
+        let value = row[col_idx.unwrap()]
+
+        match clause.operator {
+            "=" => return value == clause.value,
+            "!=" => return value != clause.value,
+            ">" => return value > clause.value,
+            ">=" => return value >= clause.value,
+            "<" => return value < clause.value,
+            "<=" => return value <= clause.value,
+            "LIKE" => return self.like_match(value, clause.value),
+            "IN" => return clause.value.contains(value),
+            "IS NULL" => return value.is_none(),
+            "IS NOT NULL" => return !value.is_none(),
+        }
+
+        return false
+    }
+
+    fn like_match(&self, value: Any, pattern: Any) -> bool {
+        let s = value.to_string()
+        let p = pattern.to_string()
+
+        if p.starts_with("%") && p.ends_with("%") {
+            return s.contains(p[1..p.len()-1])
+        } else if p.starts_with("%") {
+            return s.ends_with(p[1..])
+        } else if p.ends_with("%") {
+            return s.starts_with(p[..p.len()-1])
+        }
+
+        return s == p
+    }
+
+    fn find_column(&self, name: &String) -> Option<i64> {
+        for (i, col) in self.columns.enumerate() {
+            if col.name == *name {
+                return Some(i)
+            }
+        }
+        return None
+    }
+
+    fn order_by(&self, column: String, ascending: bool) -> Table {
+        let col_idx = self.find_column(&column)
+        if col_idx.is_none() {
+            return self.clone()
+        }
+
+        let mut sorted_rows = self.rows.clone()
+        sorted_rows.sort(|a, b| {
+            let cmp = compare(a[col_idx.unwrap()], b[col_idx.unwrap()])
+            if ascending {
+                return cmp
+            } else {
+                return cmp.reverse()
+            }
+        })
+
+        let result = self.clone()
+        result.rows = sorted_rows
+        return result
+    }
+
+    fn limit(&self, n: i64) -> Table {
+        let result = self.clone()
+        result.rows = self.rows[..n.min(self.rows.len())]
+        return result
+    }
+
+    fn offset(&self, n: i64) -> Table {
+        let result = self.clone()
+        result.rows = self.rows[n.min(self.rows.len())..]
+        return result
+    }
+
+    fn count(&self) -> i64 {
+        return self.rows.len()
+    }
+
+    fn sum(&self, column: String) -> f64 {
+        let col_idx = self.find_column(&column)
+        if col_idx.is_none() {
+            return 0.0
+        }
+
+        let mut total = 0.0
+        for row in &self.rows {
+            total += row[col_idx.unwrap()] as f64
+        }
+
+        return total
+    }
+
+    fn avg(&self, column: String) -> f64 {
+        if self.rows.is_empty() {
+            return 0.0
+        }
+        return self.sum(column) / self.rows.len()
+    }
+
+    fn min(&self, column: String) -> Any {
+        let col_idx = self.find_column(&column)
+        if col_idx.is_none() {
+            return none
+        }
+
+        let mut result = self.rows[0][col_idx.unwrap()]
+        for row in &self.rows {
+            if row[col_idx.unwrap()] < result {
+                result = row[col_idx.unwrap()]
+            }
+        }
+
+        return result
+    }
+
+    fn max(&self, column: String) -> Any {
+        let col_idx = self.find_column(&column)
+        if col_idx.is_none() {
+            return none
+        }
+
+        let mut result = self.rows[0][col_idx.unwrap()]
+        for row in &self.rows {
+            if row[col_idx.unwrap()] > result {
+                result = row[col_idx.unwrap()]
+            }
+        }
+
+        return result
+    }
+
+    fn group_by_fn(&self, columns: [String]) -> Map<String, Table> {
+        let groups = {}
+
+        for row in &self.rows {
+            let key_parts = []
+            for col in &columns {
+                let idx = self.find_column(col)
+                if idx.is_some() {
+                    key_parts.push(row[idx.unwrap()].to_string())
+                }
+            }
+            let key = key_parts.join("|")
+
+            if !groups.has(key) {
+                groups[key] = self.clone()
+                groups[key].rows = []
+            }
+            groups[key].rows.push(row)
+        }
+
+        return groups
+    }
+
+    fn to_csv(&self) -> String {
+        let lines = []
+
+        // Header
+        let header = self.columns.map(|c| c.name).join(",")
+        lines.push(header)
+
+        // Rows
+        for row in &self.rows {
+            let values = row.map(|v| {
+                if v.is_string() {
+                    return "\"" + v.to_string().replace("\"", "\"\"") + "\""
+                }
+                return v.to_string()
+            })
+            lines.push(values.join(","))
+        }
+
+        return lines.join("\n")
+    }
+
+    fn to_json(&self) -> String {
+        let rows = []
+
+        for row in &self.rows {
+            let obj = {}
+            for (i, col) in self.columns.enumerate() {
+                obj[col.name] = row[i]
+            }
+            rows.push(obj)
+        }
+
+        return Json.stringify(rows)
+    }
+}
+
+// SQL-like query builder
+struct QueryBuilder {
+    table: Table,
+    query: Query,
+}
+
+impl QueryBuilder {
+    fn new(table: Table) -> QueryBuilder {
+        return QueryBuilder {
+            table: table,
+            query: Query {
+                table: table.name,
+                select: ["*"],
+                where_clauses: [],
+                order_by: none,
+                limit: none,
+                offset: none,
+                joins: [],
+                group_by: [],
+                having: none,
+            },
+        }
+    }
+
+    fn select(&mut self, columns: [String]) -> QueryBuilder {
+        self.query.select = columns
+        return self
+    }
+
+    fn where_eq(&mut self, column: String, value: Any) -> QueryBuilder {
+        self.query.where_clauses.push(WhereClause {
+            column: column,
+            operator: "=",
+            value: value,
+        })
+        return self
+    }
+
+    fn where_gt(&mut self, column: String, value: Any) -> QueryBuilder {
+        self.query.where_clauses.push(WhereClause {
+            column: column,
+            operator: ">",
+            value: value,
+        })
+        return self
+    }
+
+    fn where_lt(&mut self, column: String, value: Any) -> QueryBuilder {
+        self.query.where_clauses.push(WhereClause {
+            column: column,
+            operator: "<",
+            value: value,
+        })
+        return self
+    }
+
+    fn order_by_col(&mut self, column: String, ascending: bool) -> QueryBuilder {
+        self.query.order_by = Some(OrderBy {
+            column: column,
+            ascending: ascending,
+        })
+        return self
+    }
+
+    fn limit_to(&mut self, n: i64) -> QueryBuilder {
+        self.query.limit = Some(n)
+        return self
+    }
+
+    fn execute(&self) -> Table {
+        let mut result = self.table.clone()
+
+        for clause in &self.query.where_clauses {
+            result = result.where_fn(clause)
+        }
+
+        if self.query.order_by.is_some() {
+            let order = self.query.order_by.unwrap()
+            result = result.order_by(order.column, order.ascending)
+        }
+
+        if self.query.offset.is_some() {
+            result = result.offset(self.query.offset.unwrap())
+        }
+
+        if self.query.limit.is_some() {
+            result = result.limit(self.query.limit.unwrap())
+        }
+
+        return result
+    }
+}
+
+fn main() {
+    println("=== Database Operations ===")
+
+    // Create table
+    let users = Table::new("users")
+    users.add_column("id", "integer")
+    users.add_column("name", "string")
+    users.add_column("age", "integer")
+    users.add_column("email", "string")
+
+    // Insert data
+    users.insert({"id": 1, "name": "Alice", "age": 30, "email": "alice@example.com"})
+    users.insert({"id": 2, "name": "Bob", "age": 25, "email": "bob@example.com"})
+    users.insert({"id": 3, "name": "Charlie", "age": 35, "email": "charlie@example.com"})
+    users.insert({"id": 4, "name": "Diana", "age": 28, "email": "diana@example.com"})
+
+    // Query
+    let result = users.where_fn(WhereClause {
+        column: "age",
+        operator: ">",
+        value: 27,
+    })
+    println("Users over 27: {} rows", result.count())
+
+    // Aggregations
+    println("Average age: {}", users.avg("age"))
+    println("Min age: {}", users.min("age"))
+    println("Max age: {}", users.max("age"))
+
+    // Query builder
+    let query = QueryBuilder::new(users)
+    query.where_gt("age", 25)
+    query.order_by_col("name", true)
+    query.limit_to(2)
+
+    let result = query.execute()
+    println("Query result: {} rows", result.count())
+
+    // CSV export
+    println("\nCSV:")
+    println(users.to_csv())
+}
+
+main()

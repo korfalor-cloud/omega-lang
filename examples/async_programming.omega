@@ -1,0 +1,236 @@
+// Async programming examples in Omega
+
+use std::channel
+use std::thread
+
+// Async function to fetch data
+async fn fetch_data(url: String) -> String {
+    println("Fetching: {}", url)
+    // Simulate network delay
+    await sleep(1000)
+    return "Data from " + url
+}
+
+// Async function to process data
+async fn process_data(data: String) -> String {
+    println("Processing: {}", data)
+    await sleep(500)
+    return data.to_upper()
+}
+
+// Async pipeline
+async fn fetch_and_process(url: String) -> String {
+    let data = await fetch_data(url)
+    let result = await process_data(data)
+    return result
+}
+
+// Concurrent tasks
+async fn run_concurrent_tasks() {
+    let urls = [
+        "https://api.example.com/users",
+        "https://api.example.com/posts",
+        "https://api.example.com/comments",
+    ]
+
+    let tasks = []
+    for url in urls {
+        tasks.push(fetch_and_process(url))
+    }
+
+    // Wait for all tasks
+    let results = await Promise.all(tasks)
+    for result in results {
+        println("Result: {}", result)
+    }
+}
+
+// Channel-based communication
+fn producer_consumer() {
+    let (tx, rx) = channel::channel()
+
+    // Producer thread
+    thread::spawn(|| {
+        for i in 0..10 {
+            tx.send(i)
+            println("Produced: {}", i)
+        }
+        tx.close()
+    })
+
+    // Consumer in main thread
+    loop {
+        let value = rx.recv()
+        if value.is_none() {
+            break
+        }
+        println("Consumed: {}", value)
+    }
+}
+
+// Fan-out pattern
+fn fan_out() {
+    let (tx, rx) = channel::channel()
+    let num_workers = 4
+
+    // Create worker threads
+    for i in 0..num_workers {
+        let worker_rx = rx.clone()
+        thread::spawn(move || {
+            loop {
+                let task = worker_rx.recv()
+                if task.is_none() {
+                    break
+                }
+                println("Worker {} processing: {}", i, task)
+                thread::sleep(100)
+            }
+        })
+    }
+
+    // Send tasks
+    for i in 0..20 {
+        tx.send(i)
+    }
+    tx.close()
+}
+
+// Async generator
+async fn* fibonacci_generator() -> i64 {
+    let a = 0
+    let b = 1
+    loop {
+        yield a
+        let temp = a + b
+        a = b
+        b = temp
+    }
+}
+
+// Async iterator
+async fn process_stream() {
+    let gen = fibonacci_generator()
+
+    for i in 0..10 {
+        let value = await gen.next()
+        println("Fibonacci {}: {}", i, value)
+    }
+}
+
+// Timeout pattern
+async fn with_timeout(future: Any, timeout_ms: i64) -> Any? {
+    let timer = sleep(timeout_ms)
+    let result = await Promise.race([future, timer])
+
+    if result == "timeout" {
+        println("Operation timed out!")
+        return none
+    }
+
+    return result
+}
+
+// Retry pattern
+async fn with_retry(fn: () -> Any, max_retries: i64) -> Any {
+    let retries = 0
+
+    loop {
+        try {
+            return await fn()
+        } catch (e) {
+            retries += 1
+            if retries >= max_retries {
+                throw e
+            }
+            println("Retry {} after error: {}", retries, e)
+            await sleep(1000 * retries)
+        }
+    }
+}
+
+// Rate limiter
+struct RateLimiter {
+    max_requests: i64,
+    window_ms: i64,
+    requests: [i64],
+}
+
+impl RateLimiter {
+    fn new(max_requests: i64, window_ms: i64) -> RateLimiter {
+        return RateLimiter {
+            max_requests: max_requests,
+            window_ms: window_ms,
+            requests: [],
+        }
+    }
+
+    async fn acquire(&mut self) {
+        let now = current_time_ms()
+
+        // Remove old requests
+        self.requests = self.requests.filter(|t| now - t < self.window_ms)
+
+        if self.requests.len() >= self.max_requests {
+            let wait_time = self.requests[0] + self.window_ms - now
+            await sleep(wait_time)
+        }
+
+        self.requests.push(now)
+    }
+}
+
+// Worker pool
+struct WorkerPool {
+    workers: [thread::Thread],
+    task_queue: channel::Sender<Any>,
+}
+
+impl WorkerPool {
+    fn new(size: i64) -> WorkerPool {
+        let (tx, rx) = channel::channel()
+        let workers = []
+
+        for i in 0..size {
+            let worker_rx = rx.clone()
+            let worker = thread::spawn(move || {
+                loop {
+                    let task = worker_rx.recv()
+                    if task.is_none() {
+                        break
+                    }
+                    task()
+                }
+            })
+            workers.push(worker)
+        }
+
+        return WorkerPool {
+            workers: workers,
+            task_queue: tx,
+        }
+    }
+
+    fn submit(&self, task: () -> Any) {
+        self.task_queue.send(task)
+    }
+
+    fn shutdown(&self) {
+        self.task_queue.close()
+        for worker in self.workers {
+            worker.join()
+        }
+    }
+}
+
+fn main() {
+    println("=== Producer Consumer ===")
+    producer_consumer()
+
+    println("\n=== Fan Out ===")
+    fan_out()
+
+    println("\n=== Process Stream ===")
+    await process_stream()
+}
+
+main()

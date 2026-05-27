@@ -1,0 +1,159 @@
+// Module system in Omega
+// Demonstrates modules, imports, and organization
+
+// Module declaration
+mod math {
+    pub const PI = 3.14159265358979
+    pub const E = 2.71828182845904
+
+    pub fn add(a, b) {
+        return a + b
+    }
+
+    pub fn multiply(a, b) {
+        return a * b
+    }
+
+    pub fn factorial(n) {
+        if n <= 1 {
+            return 1
+        }
+        return n * factorial(n - 1)
+    }
+
+    // Nested module
+    pub mod geometry {
+        pub fn circle_area(radius) {
+            return math.PI * radius * radius
+        }
+
+        pub fn circle_circumference(radius) {
+            return 2 * math.PI * radius
+        }
+
+        pub fn rectangle_area(width, height) {
+            return width * height
+        }
+    }
+}
+
+mod string_utils {
+    pub fn capitalize(s) {
+        if s.is_empty() {
+            return s
+        }
+        return s[0].to_upper() + s[1..]
+    }
+
+    pub fn title_case(s) {
+        return s.split(" ")
+            .map(|word| capitalize(word))
+            .join(" ")
+    }
+
+    pub fn slugify(s) {
+        return s.to_lower()
+            .replace(" ", "-")
+            .replace("_", "-")
+    }
+}
+
+mod collections {
+    pub struct Stack {
+        items: Vec<Any>,
+    }
+
+    impl Stack {
+        pub fn new() -> Stack {
+            return Stack { items: [] }
+        }
+
+        pub fn push(item) {
+            self.items.push(item)
+        }
+
+        pub fn pop() -> Option<Any> {
+            return self.items.pop()
+        }
+
+        pub fn peek() -> Option<Any> {
+            return self.items.last()
+        }
+
+        pub fn is_empty() -> bool {
+            return self.items.is_empty()
+        }
+
+        pub fn size() -> usize {
+            return self.items.len()
+        }
+    }
+
+    pub struct Queue {
+        items: Vec<Any>,
+    }
+
+    impl Queue {
+        pub fn new() -> Queue {
+            return Queue { items: [] }
+        }
+
+        pub fn enqueue(item) {
+            self.items.push(item)
+        }
+
+        pub fn dequeue() -> Option<Any> {
+            if self.items.is_empty() {
+                return none
+            }
+            return Some(self.items.remove(0))
+        }
+
+        pub fn front() -> Option<Any> {
+            return self.items.first()
+        }
+
+        pub fn is_empty() -> bool {
+            return self.items.is_empty()
+        }
+    }
+}
+
+// Import specific items
+use math::{PI, add}
+use math::geometry::circle_area
+
+// Import with alias
+use string_utils as su
+
+// Using imported items
+println("Math Examples:")
+println("==============")
+println("PI = {}", PI)
+println("add(3, 4) = {}", add(3, 4))
+println("factorial(5) = {}", math.factorial(5))
+println("Circle area (r=5) = {}", circle_area(5))
+
+println("\nString Utils:")
+println("=============")
+println("capitalize('hello') = {}", su.capitalize("hello"))
+println("title_case('hello world') = {}", su.title_case("hello world"))
+println("slugify('Hello World') = {}", su.slugify("Hello World"))
+
+println("\nCollections:")
+println("============")
+
+let stack = collections::Stack::new()
+stack.push(1)
+stack.push(2)
+stack.push(3)
+println("Stack peek: {}", stack.peek())
+println("Stack pop: {}", stack.pop())
+println("Stack size: {}", stack.size())
+
+let queue = collections::Queue::new()
+queue.enqueue("first")
+queue.enqueue("second")
+queue.enqueue("third")
+println("Queue front: {}", queue.front())
+println("Queue dequeue: {}", queue.dequeue())

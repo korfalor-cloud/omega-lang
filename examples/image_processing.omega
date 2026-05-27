@@ -1,0 +1,150 @@
+// Image processing example in Omega
+
+use std::image
+use std::image::pixel
+use std::image::filters
+use std::image::transforms
+
+fn main() {
+    println("=== Image Processing ===")
+
+    // Create a test image
+    let img = Image::new(100, 100)
+
+    // Draw some shapes
+    img.fill(Pixel::rgb(30, 30, 50))
+    img.fill_rect(10, 10, 30, 30, Pixel::red())
+    img.draw_circle(70, 70, 20, Pixel::blue())
+    img.draw_line(0, 0, 99, 99, Pixel::green())
+    img.draw_rect(50, 10, 40, 30, Pixel::yellow())
+
+    println("Original image: {}x{}", img.width(), img.height())
+    println("Mean color: {}", img.mean_color())
+
+    // Apply filters
+    println("\n--- Filters ---")
+
+    let gray = grayscale(&img)
+    println("Grayscale mean: {}", gray.mean_color())
+
+    let inverted = invert(&img)
+    println("Inverted mean: {}", inverted.mean_color())
+
+    let bright = brightness(&img, 50)
+    println("Brightened mean: {}", bright.mean_color())
+
+    let contrast_img = contrast(&img, 1.5)
+    println("High contrast mean: {}", contrast_img.mean_color())
+
+    let binary = threshold(&img, 128)
+    println("Binary (threshold=128) mean: {}", binary.mean_color())
+
+    let sepia_img = sepia(&img)
+    println("Sepia mean: {}", sepia_img.mean_color())
+
+    // Blur and sharpen
+    let blurred = blur(&img)
+    println("Blurred mean: {}", blurred.mean_color())
+
+    let gaussian = gaussian_blur(&img)
+    println("Gaussian blur mean: {}", gaussian.mean_color())
+
+    let sharpened = sharpen(&img)
+    println("Sharpened mean: {}", sharpened.mean_color())
+
+    // Edge detection
+    let edges = edge_detect(&img)
+    println("Edge detection mean: {}", edges.mean_color())
+
+    let embossed = emboss(&img)
+    println("Emboss mean: {}", embossed.mean_color())
+
+    // Transforms
+    println("\n--- Transforms ---")
+
+    let flipped_h = flip_horizontal(&img)
+    println("Flipped horizontal: {}x{}", flipped_h.width(), flipped_h.height())
+
+    let flipped_v = flip_vertical(&img)
+    println("Flipped vertical: {}x{}", flipped_v.width(), flipped_v.height())
+
+    let rotated = rotate_90(&img)
+    println("Rotated 90: {}x{}", rotated.width(), rotated.height())
+
+    let resized = resize_nearest(&img, 200, 200)
+    println("Resized (nearest): {}x{}", resized.width(), resized.height())
+
+    let resized_bilinear = resize_bilinear(&img, 50, 50)
+    println("Resized (bilinear): {}x{}", resized_bilinear.width(), resized_bilinear.height())
+
+    // Crop and pad
+    let cropped = crop(&img, 20, 20, 40, 40)
+    println("Cropped: {}x{}", cropped.width(), cropped.height())
+
+    let padded = pad(&img, 10, 10, 10, 10, Pixel::white())
+    println("Padded: {}x{}", padded.width(), padded.height())
+
+    // Composite operations
+    println("\n--- Composite ---")
+
+    // Create a gradient image
+    let mut gradient = Image::new(100, 100)
+    for y in 0..100 {
+        for x in 0..100 {
+            let r = (x * 255 / 100) as u8
+            let g = (y * 255 / 100) as u8
+            gradient.set_pixel(x, y, Pixel::rgb(r, g, 128))
+        }
+    }
+    println("Gradient mean: {}", gradient.mean_color())
+
+    // Blend images
+    let blended = blend_images(&img, &gradient, 0.5)
+    println("Blended mean: {}", blended.mean_color())
+
+    // Mosaic
+    let mut tiles = []
+    for i in 0..4 {
+        let mut tile = Image::new(50, 50)
+        tile.fill(Pixel::rgb(i * 60, 100, 200 - i * 40))
+        tiles.push(tile)
+    }
+    let mosaic_img = mosaic(&tiles)
+    println("Mosaic: {}x{}", mosaic_img.width(), mosaic_img.height())
+
+    // Histogram
+    println("\n--- Histogram ---")
+    let hist = img.histogram()
+    println("Histogram bins: {}", hist.len())
+    let max_bin = hist.max()
+    println("Max bin value: {}", max_bin)
+
+    // PPM export
+    let ppm = img.to_ppm()
+    println("\nPPM header: {}", ppm[..20])
+
+    // Tiled image
+    let tiled = tile(&img, 3, 2)
+    println("Tiled: {}x{}", tiled.width(), tiled.height())
+
+    // Median filter
+    let median = median_filter(&img, 2)
+    println("Median filtered mean: {}", median.mean_color())
+
+    // Color filter
+    let color_filtered = color_filter(&img, 1.2, 0.8, 1.0)
+    println("Color filtered mean: {}", color_filtered.mean_color())
+
+    // Custom convolution kernel
+    let custom_kernel = [
+        [0.0, -1.0, 0.0],
+        [-1.0, 5.0, -1.0],
+        [0.0, -1.0, 0.0],
+    ]
+    let custom_filtered = convolution(&img, &custom_kernel)
+    println("Custom filter mean: {}", custom_filtered.mean_color())
+
+    println("\n=== Done ===")
+}
+
+main()

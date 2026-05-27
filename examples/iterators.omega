@@ -1,0 +1,142 @@
+// Iterators and functional programming in Omega
+// Demonstrates map, filter, reduce, and lazy evaluation
+
+// Basic iterators
+println("Basic Iterators:")
+println("================")
+
+let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Map
+let doubled = numbers.map(|x| x * 2)
+println("Doubled: {}", doubled)
+
+// Filter
+let evens = numbers.filter(|x| x % 2 == 0)
+println("Evens: {}", evens)
+
+// Reduce
+let sum = numbers.reduce(|a, b| a + b)
+println("Sum: {}", sum)
+
+// Chaining
+let result = numbers
+    .filter(|x| x % 2 == 0)
+    .map(|x| x * x)
+    .reduce(|a, b| a + b)
+println("Sum of squares of evens: {}", result)
+
+// Iterator methods
+println("\nIterator Methods:")
+println("=================")
+
+let data = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]
+
+println("First: {}", data.first())
+println("Last: {}", data.last())
+println("Count: {}", data.len())
+println("Sum: {}", data.sum())
+println("Min: {}", data.min())
+println("Max: {}", data.max())
+println("Average: {}", data.average())
+
+// Find
+let found = data.find(|x| x > 5)
+println("First > 5: {}", found)
+
+// Any / All
+println("Any > 10: {}", data.any(|x| x > 10))
+println("All > 0: {}", data.all(|x| x > 0))
+
+// Take / Skip
+println("Take 3: {}", data.take(3))
+println("Skip 3: {}", data.skip(3))
+
+// Zip
+let names = ["Alice", "Bob", "Charlie"]
+let ages = [30, 25, 35]
+let people = names.zip(ages)
+println("People: {}", people)
+
+// Enumerate
+let indexed = names.enumerate()
+println("Indexed: {}", indexed)
+
+// Custom iterators
+println("\nCustom Iterators:")
+println("=================")
+
+struct Fibonacci {
+    a: i64,
+    b: i64,
+}
+
+impl Fibonacci {
+    fn new() -> Fibonacci {
+        return Fibonacci { a: 0, b: 1 }
+    }
+
+    fn next() -> i64 {
+        let result = self.a
+        let temp = self.a + self.b
+        self.a = self.b
+        self.b = temp
+        return result
+    }
+}
+
+let fib = Fibonacci::new()
+let first_10 = []
+for _ in 0..10 {
+    first_10.push(fib.next())
+}
+println("Fibonacci: {}", first_10)
+
+// Generator expressions
+println("\nGenerators:")
+println("===========")
+
+let squares = (x * x for x in 0..10)
+println("Squares: {}", squares.collect())
+
+let evens = (x for x in 0..20 if x % 2 == 0)
+println("Evens: {}", evens.collect())
+
+// Infinite iterator
+fn range_from(start) {
+    let current = start
+    return || {
+        let value = current
+        current += 1
+        return value
+    }
+}
+
+let counter = range_from(10)
+println("Counter: {}, {}, {}", counter(), counter(), counter())
+
+// Lazy evaluation
+println("\nLazy Evaluation:")
+println("================")
+
+let large_range = 0..1000000
+let result = large_range
+    .filter(|x| x % 2 == 0)
+    .map(|x| x * x)
+    .take(5)
+    .collect()
+println("First 5 squares of evens: {}", result)
+
+// Functional composition
+println("\nFunction Composition:")
+println("=====================")
+
+fn compose(f, g) {
+    return |x| f(g(x))
+}
+
+fn add_one(x) { return x + 1 }
+fn double(x) { return x * 2 }
+
+let add_one_then_double = compose(double, add_one)
+println("add_one_then_double(5) = {}", add_one_then_double(5))

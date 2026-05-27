@@ -1,0 +1,134 @@
+// Error handling in Omega
+// Demonstrates try/catch, Result type, and error propagation
+
+// Basic try/catch
+println("Try/Catch:")
+println("==========")
+
+try {
+    let result = 10 / 0
+    println("This won't print")
+} catch (e) {
+    println("Caught error: {}", e)
+}
+
+// Multiple catch clauses
+try {
+    let value = parse_int("not a number")
+} catch (e: ValueError) {
+    println("Value error: {}", e)
+} catch (e) {
+    println("Other error: {}", e)
+}
+
+// Finally block
+try {
+    println("Trying something risky")
+    throw "Something went wrong"
+} catch (e) {
+    println("Caught: {}", e)
+} finally {
+    println("This always runs")
+}
+
+// Result type
+println("\nResult Type:")
+println("============")
+
+fn safe_divide(a, b) -> Result<f64, String> {
+    if b == 0 {
+        return Err("Division by zero")
+    }
+    return Ok(a / b)
+}
+
+let result = safe_divide(10, 3)
+match result {
+    Ok(value) => println("Result: {}", value),
+    Err(error) => println("Error: {}", error),
+}
+
+let result = safe_divide(10, 0)
+match result {
+    Ok(value) => println("Result: {}", value),
+    Err(error) => println("Error: {}", error),
+}
+
+// Error propagation with ?
+fn calculate() -> Result<f64, String> {
+    let a = safe_divide(10, 2)? // Propagates error if Err
+    let b = safe_divide(20, 4)? // Propagates error if Err
+    return Ok(a + b)
+}
+
+match calculate() {
+    Ok(value) => println("Calculated: {}", value),
+    Err(error) => println("Calculation failed: {}", error),
+}
+
+// Custom error types
+enum AppError {
+    NotFound(String),
+    PermissionDenied { resource: String, user: String },
+    InternalError(String),
+}
+
+impl AppError {
+    fn to_string() -> String {
+        match self {
+            AppError::NotFound(name) => return format("Not found: {}", name),
+            AppError::PermissionDenied { resource, user } =>
+                return format("Permission denied: {} for {}", resource, user),
+            AppError::InternalError(msg) => return format("Internal error: {}", msg),
+        }
+    }
+}
+
+fn find_user(id) -> Result<String, AppError> {
+    if id < 0 {
+        return Err(AppError::InternalError("Invalid ID"))
+    }
+    if id == 0 {
+        return Err(AppError::NotFound("User"))
+    }
+    return Ok(format("User {}", id))
+}
+
+match find_user(1) {
+    Ok(user) => println("Found: {}", user),
+    Err(e) => println("Error: {}", e.to_string()),
+}
+
+match find_user(0) {
+    Ok(user) => println("Found: {}", user),
+    Err(e) => println("Error: {}", e.to_string()),
+}
+
+// Defer and errdefer
+println("\nDefer:")
+println("======")
+
+fn process_file(path) {
+    let file = open(path)
+    defer {
+        file.close()
+        println("File closed (defer)")
+    }
+
+    errdefer {
+        println("Error occurred, cleaning up")
+    }
+
+    // Process file...
+    if path == "bad.txt" {
+        throw "File corrupted"
+    }
+    return "Success"
+}
+
+try {
+    let result = process_file("good.txt")
+    println("Result: {}", result)
+} catch (e) {
+    println("Error: {}", e)
+}

@@ -1,0 +1,190 @@
+// Web server in Omega
+// Demonstrates networking, HTTP, and async programming
+
+use std::net::tcp
+use std::net::http
+use std::async
+
+// Simple HTTP server
+fn handle_request(request) -> HttpResponse {
+    let path = request.path
+
+    match path {
+        "/" => {
+            return HttpResponse {
+                status: 200,
+                headers: {"Content-Type": "text/html"},
+                body: "<h1>Welcome to Omega Web Server!</h1>"
+            }
+        }
+        "/api/hello" => {
+            return HttpResponse {
+                status: 200,
+                headers: {"Content-Type": "application/json"},
+                body: '{"message": "Hello, World!"}'
+            }
+        }
+        "/api/time" => {
+            let now = time::now_iso8601()
+            return HttpResponse {
+                status: 200,
+                headers: {"Content-Type": "application/json"},
+                body: format('{"time": "{}"}', now)
+            }
+        }
+        _ => {
+            return HttpResponse {
+                status: 404,
+                headers: {"Content-Type": "text/plain"},
+                body: "Not Found"
+            }
+        }
+    }
+}
+
+// Start server
+fn start_server(port) {
+    let listener = tcp::TcpListener::bind(format("0.0.0.0:{}", port))
+    println!("Server listening on port {}", port)
+
+    loop {
+        let (stream, addr) = listener.accept()
+        println!("Connection from {}", addr)
+
+        // Handle connection in new thread
+        thread::spawn(|| {
+            let request = http::parse_request(stream)
+            let response = handle_request(request)
+            http::send_response(stream, response)
+            stream.close()
+        })
+    }
+}
+
+// Async version
+async fn handle_request_async(request) -> HttpResponse {
+    // Simulate async work
+    let data = await fetch_data_from_database(request.path)
+    return HttpResponse {
+        status: 200,
+        headers: {"Content-Type": "application/json"},
+        body: json::stringify(data)
+    }
+}
+
+async fn start_server_async(port) {
+    let listener = tcp::TcpListener::bind(format("0.0.0.0:{}", port))
+    println!("Async server listening on port {}", port)
+
+    loop {
+        let (stream, addr) = await listener.accept()
+        println!("Connection from {}", addr)
+
+        // Handle connection asynchronously
+        async {
+            let request = http::parse_request(stream)
+            let response = await handle_request_async(request)
+            http::send_response(stream, response)
+            stream.close()
+        }
+    }
+}
+
+// Middleware
+fn logging_middleware(request, next) {
+    let start = time::now()
+    println!("[{}] {} {}", time::now_local(), request.method, request.path)
+
+    let response = next(request)
+
+    let duration = time::elapsed_ms(start)
+    println!("[{}] {} {} - {} ({}ms)",
+        time::now_local(),
+        request.method,
+        request.path,
+        response.status,
+        duration
+    )
+
+    return response
+}
+
+fn cors_middleware(request, next) {
+    let response = next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+}
+
+// Router
+struct Router {
+    routes: Map<String, Function>,
+    middlewares: Vec<Function>,
+}
+
+impl Router {
+    fn new() -> Router {
+        return Router {
+            routes: {},
+            middlewares: [],
+        }
+    }
+
+    fn use(middleware) {
+        self.middlewares.push(middleware)
+    }
+
+    fn get(path, handler) {
+        self.routes[format("GET:{}", path)] = handler
+    }
+
+    fn post(path, handler) {
+        self.routes[format("POST:{}", path)] = handler
+    }
+
+    fn handle(request) -> HttpResponse {
+        // Apply middlewares
+        let handler = |req| {
+            let key = format("{}:{}", req.method, req.path)
+            let route_handler = self.routes[key]
+            if route_handler.is_some() {
+                return route_handler(req)
+            }
+            return HttpResponse { status: 404, body: "Not Found" }
+        }
+
+        // Apply middlewares in reverse
+        let final_handler = handler
+        for middleware in self.middlewares.reversed() {
+            final_handler = |req| middleware(req, final_handler)
+        }
+
+        return final_handler(request)
+    }
+}
+
+// Usage
+let router = Router::new()
+router.use(logging_middleware)
+router.use(cors_middleware)
+
+router.get("/", |req| {
+    return HttpResponse { status: 200, body: "Hello!" }
+})
+
+router.get("/api/users", |req| {
+    let users = database::get_users()
+    return HttpResponse {
+        status: 200,
+        body: json::stringify(users)
+    }
+})
+
+router.post("/api/users", |req| {
+    let user = json::parse(req.body)
+    database::create_user(user)
+    return HttpResponse { status: 201, body: "Created" }
+})
+
+start_server(8080)
