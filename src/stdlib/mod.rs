@@ -73,3 +73,7 @@ pub mod random_process;
 pub mod gpu;
 pub mod kalman_filter;
 pub mod distributed_computing;
+pub mod gaussian_process;
+pub mod time_series_analysis;
+pub mod kalman_filter_ext;
+pub mod neural_ode;
