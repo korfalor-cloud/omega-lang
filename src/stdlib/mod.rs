@@ -105,3 +105,7 @@ pub mod world_models;
 pub mod neural_architecture;
 pub mod automl;
 pub mod kalman_filter_ext8;
+pub mod continual_learning;
+pub mod lifelong_learning;
+pub mod domain_adaptation;
+pub mod kalman_filter_ext9;
