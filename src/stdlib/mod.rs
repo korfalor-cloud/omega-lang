@@ -85,3 +85,7 @@ pub mod mcmc;
 pub mod gaussian_processes_ext;
 pub mod optimization_ext;
 pub mod kalman_filter_ext3;
+pub mod reinforcement_learning;
+pub mod graph_neural;
+pub mod attention_mechanisms;
+pub mod kalman_filter_ext4;
