@@ -109,3 +109,7 @@ pub mod continual_learning;
 pub mod lifelong_learning;
 pub mod domain_adaptation;
 pub mod kalman_filter_ext9;
+pub mod multitask_learning;
+pub mod zero_shot;
+pub mod few_shot;
+pub mod kalman_filter_ext10;
