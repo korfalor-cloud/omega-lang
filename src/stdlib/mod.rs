@@ -101,3 +101,7 @@ pub mod imitation_learning;
 pub mod offline_rl;
 pub mod multi_agent;
 pub mod kalman_filter_ext7;
+pub mod world_models;
+pub mod neural_architecture;
+pub mod automl;
+pub mod kalman_filter_ext8;
