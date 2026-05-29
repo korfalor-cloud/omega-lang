@@ -10,3 +10,4 @@ pub mod lru_cache;
 pub mod ring_buffer;
 pub mod sorted_map;
 pub mod multimap;
+pub mod advanced;
