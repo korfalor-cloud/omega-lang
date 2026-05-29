@@ -113,3 +113,7 @@ pub mod multitask_learning;
 pub mod zero_shot;
 pub mod few_shot;
 pub mod kalman_filter_ext10;
+pub mod active_learning;
+pub mod transfer_learning;
+pub mod sample_selection;
+pub mod kalman_filter_ext11;
