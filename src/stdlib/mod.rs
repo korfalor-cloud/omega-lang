@@ -81,3 +81,7 @@ pub mod gaussian_mixture;
 pub mod hidden_markov;
 pub mod variational_inference;
 pub mod kalman_filter_ext2;
+pub mod mcmc;
+pub mod gaussian_processes_ext;
+pub mod optimization_ext;
+pub mod kalman_filter_ext3;
