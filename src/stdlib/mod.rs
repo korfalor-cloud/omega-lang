@@ -117,3 +117,7 @@ pub mod active_learning;
 pub mod transfer_learning;
 pub mod sample_selection;
 pub mod kalman_filter_ext11;
+pub mod data_augmentation;
+pub mod ensemble_methods;
+pub mod calibration;
+pub mod kalman_filter_ext12;
