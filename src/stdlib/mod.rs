@@ -121,3 +121,7 @@ pub mod data_augmentation;
 pub mod ensemble_methods;
 pub mod calibration;
 pub mod kalman_filter_ext12;
+pub mod regularization;
+pub mod loss_functions;
+pub mod optimizers;
+pub mod kalman_filter_ext13;
