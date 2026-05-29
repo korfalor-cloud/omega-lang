@@ -70,3 +70,6 @@ pub mod kalman;
 pub mod ode;
 pub mod pde;
 pub mod random_process;
+pub mod gpu;
+pub mod kalman_filter;
+pub mod distributed_computing;
