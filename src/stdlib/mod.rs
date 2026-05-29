@@ -77,3 +77,7 @@ pub mod gaussian_process;
 pub mod time_series_analysis;
 pub mod kalman_filter_ext;
 pub mod neural_ode;
+pub mod gaussian_mixture;
+pub mod hidden_markov;
+pub mod variational_inference;
+pub mod kalman_filter_ext2;
