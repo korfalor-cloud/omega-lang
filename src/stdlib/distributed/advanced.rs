@@ -1,646 +1,290 @@
-/// Advanced distributed systems primitives.
-///
-/// Contains consistent hashing, vector clocks, CRDTs (G-Counter, PN-Counter,
-/// OR-Set), a lightweight Raft consensus simulation, and a distributed hash
-/// table built on top of the consistent-hash ring.
+/// Advanced distributed systems: consistent hashing, vector clocks, CRDTs,
+/// Raft consensus simulation, and a distributed hash table.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-// ---------------------------------------------------------------------------
-// Consistent hashing
-// ---------------------------------------------------------------------------
+// -- Consistent hashing ----------------------------------------------------
 
 const VIRTUAL_NODES: u64 = 128;
 
 #[derive(Debug, Clone)]
-pub struct ConsistentHashRing {
-    ring: BTreeMap<u64, String>,
-    nodes: HashSet<String>,
-}
+pub struct ConsistentHashRing { ring: BTreeMap<u64, String>, nodes: HashSet<String> }
 
 impl ConsistentHashRing {
-    pub fn new() -> Self {
-        Self {
-            ring: BTreeMap::new(),
-            nodes: HashSet::new(),
-        }
-    }
-
-    fn hash_key(key: &str) -> u64 {
-        let mut h = DefaultHasher::new();
-        key.hash(&mut h);
-        h.finish()
-    }
-
+    pub fn new() -> Self { Self { ring: BTreeMap::new(), nodes: HashSet::new() } }
+    fn hash(key: &str) -> u64 { let mut h = DefaultHasher::new(); key.hash(&mut h); h.finish() }
     pub fn add_node(&mut self, node: &str) {
         self.nodes.insert(node.to_string());
-        for i in 0..VIRTUAL_NODES {
-            let vnode_key = format!("{}#{}", node, i);
-            let h = Self::hash_key(&vnode_key);
-            self.ring.insert(h, node.to_string());
-        }
+        for i in 0..VIRTUAL_NODES { self.ring.insert(Self::hash(&format!("{}#{}", node, i)), node.into()); }
     }
-
     pub fn remove_node(&mut self, node: &str) {
         self.nodes.remove(node);
-        for i in 0..VIRTUAL_NODES {
-            let vnode_key = format!("{}#{}", node, i);
-            let h = Self::hash_key(&vnode_key);
-            self.ring.remove(&h);
-        }
+        for i in 0..VIRTUAL_NODES { self.ring.remove(&Self::hash(&format!("{}#{}", node, i))); }
     }
-
     pub fn get_node(&self, key: &str) -> Option<String> {
-        if self.ring.is_empty() {
-            return None;
-        }
-        let h = Self::hash_key(key);
-        // First entry >= h, or wrap around to the first entry.
-        let target = self
-            .ring
-            .range(h..)
-            .next()
-            .or_else(|| self.ring.iter().next())
-            .map(|(_, v)| v.clone());
-        target
+        if self.ring.is_empty() { return None; }
+        let h = Self::hash(key);
+        self.ring.range(h..).next().or_else(|| self.ring.iter().next()).map(|(_, v)| v.clone())
     }
-
-    pub fn node_count(&self) -> usize {
-        self.nodes.len()
-    }
+    pub fn node_count(&self) -> usize { self.nodes.len() }
 }
 
-// ---------------------------------------------------------------------------
-// Vector clocks
-// ---------------------------------------------------------------------------
+// -- Vector clocks ---------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdvancedVectorClock {
-    clocks: HashMap<String, u64>,
-}
+pub struct AdvancedVectorClock { clocks: HashMap<String, u64> }
 
 impl AdvancedVectorClock {
-    pub fn new() -> Self {
-        Self {
-            clocks: HashMap::new(),
-        }
-    }
-
-    pub fn increment(&mut self, node_id: &str) {
-        *self.clocks.entry(node_id.to_string()).or_insert(0) += 1;
-    }
-
+    pub fn new() -> Self { Self { clocks: HashMap::new() } }
+    pub fn increment(&mut self, n: &str) { *self.clocks.entry(n.into()).or_insert(0) += 1; }
     pub fn merge(&mut self, other: &AdvancedVectorClock) {
-        for (node, &time) in &other.clocks {
-            let entry = self.clocks.entry(node.clone()).or_insert(0);
-            *entry = (*entry).max(time);
+        for (n, &t) in &other.clocks {
+            let e = self.clocks.entry(n.clone()).or_insert(0);
+            if t > *e { *e = t; }
         }
     }
-
-    pub fn get(&self, node_id: &str) -> u64 {
-        *self.clocks.get(node_id).unwrap_or(&0)
-    }
-
-    /// Returns `true` if `self` happened-before `other`.
+    pub fn get(&self, n: &str) -> u64 { *self.clocks.get(n).unwrap_or(&0) }
     pub fn happens_before(&self, other: &AdvancedVectorClock) -> bool {
-        let mut all_leq = true;
-        let mut any_lt = false;
-
-        for (node, &time) in &self.clocks {
-            let other_time = other.get(node);
-            if time > other_time {
-                all_leq = false;
-                break;
-            }
-            if time < other_time {
-                any_lt = true;
-            }
+        let (mut all_leq, mut any_lt) = (true, false);
+        for (n, &t) in &self.clocks {
+            let ot = other.get(n);
+            if t > ot { all_leq = false; break; }
+            if t < ot { any_lt = true; }
         }
-
         all_leq && any_lt
     }
-
-    /// Returns `true` if neither clock happens-before the other.
     pub fn concurrent_with(&self, other: &AdvancedVectorClock) -> bool {
         !self.happens_before(other) && !other.happens_before(self)
     }
 }
 
-// ---------------------------------------------------------------------------
-// CRDTs
-// ---------------------------------------------------------------------------
+// -- CRDTs -----------------------------------------------------------------
 
-/// Grow-only counter -- each node maintains its own monotonic sub-counter.
+/// Grow-only counter.
 #[derive(Debug, Clone)]
-pub struct GCounter {
-    counts: HashMap<String, u64>,
-}
-
+pub struct GCounter { counts: HashMap<String, u64> }
 impl GCounter {
-    pub fn new() -> Self {
-        Self {
-            counts: HashMap::new(),
-        }
-    }
-
-    pub fn increment(&mut self, node_id: &str, delta: u64) {
-        *self.counts.entry(node_id.to_string()).or_insert(0) += delta;
-    }
-
-    pub fn value(&self) -> u64 {
-        self.counts.values().sum()
-    }
-
-    pub fn merge(&mut self, other: &GCounter) {
-        for (node, &count) in &other.counts {
-            let entry = self.counts.entry(node.clone()).or_insert(0);
-            *entry = (*entry).max(count);
+    pub fn new() -> Self { Self { counts: HashMap::new() } }
+    pub fn increment(&mut self, n: &str, d: u64) { *self.counts.entry(n.into()).or_insert(0) += d; }
+    pub fn value(&self) -> u64 { self.counts.values().sum() }
+    pub fn merge(&mut self, o: &GCounter) {
+        for (n, &c) in &o.counts {
+            let e = self.counts.entry(n.clone()).or_insert(0);
+            if c > *e { *e = c; }
         }
     }
 }
 
-/// Positive-Negative counter built from two G-Counters.
+/// Positive-Negative counter.
 #[derive(Debug, Clone)]
-pub struct PNCounter {
-    positive: GCounter,
-    negative: GCounter,
-}
-
+pub struct PNCounter { pos: GCounter, neg: GCounter }
 impl PNCounter {
-    pub fn new() -> Self {
-        Self {
-            positive: GCounter::new(),
-            negative: GCounter::new(),
-        }
+    pub fn new() -> Self { Self { pos: GCounter::new(), neg: GCounter::new() } }
+    pub fn increment(&mut self, n: &str, d: i64) {
+        if d >= 0 { self.pos.increment(n, d as u64); } else { self.neg.increment(n, (-d) as u64); }
     }
-
-    pub fn increment(&mut self, node_id: &str, delta: i64) {
-        if delta >= 0 {
-            self.positive.increment(node_id, delta as u64);
-        } else {
-            self.negative.increment(node_id, (-delta) as u64);
-        }
-    }
-
-    pub fn value(&self) -> i64 {
-        self.positive.value() as i64 - self.negative.value() as i64
-    }
-
-    pub fn merge(&mut self, other: &PNCounter) {
-        self.positive.merge(&other.positive);
-        self.negative.merge(&other.negative);
-    }
+    pub fn value(&self) -> i64 { self.pos.value() as i64 - self.neg.value() as i64 }
+    pub fn merge(&mut self, o: &PNCounter) { self.pos.merge(&o.pos); self.neg.merge(&o.neg); }
 }
 
-/// Observed-Remove Set -- elements can be added and removed; removes are
-/// tracked per-element so that concurrent add/remove both survive.
+/// Observed-Remove Set.
 #[derive(Debug, Clone)]
-pub struct ORSet {
-    elements: HashMap<String, HashSet<String>>,
-    tombstones: HashMap<String, HashSet<String>>,
-}
-
+pub struct ORSet { elems: HashMap<String, HashSet<String>>, tombs: HashMap<String, HashSet<String>> }
 impl ORSet {
-    pub fn new() -> Self {
-        Self {
-            elements: HashMap::new(),
-            tombstones: HashMap::new(),
-        }
+    pub fn new() -> Self { Self { elems: HashMap::new(), tombs: HashMap::new() } }
+    pub fn add(&mut self, e: &str, tag: &str) { self.elems.entry(e.into()).or_default().insert(tag.into()); }
+    pub fn remove(&mut self, e: &str) {
+        if let Some(tags) = self.elems.remove(e) { self.tombs.entry(e.into()).or_default().extend(tags); }
     }
-
-    pub fn add(&mut self, element: &str, tag: &str) {
-        self.elements
-            .entry(element.to_string())
-            .or_default()
-            .insert(tag.to_string());
+    pub fn contains(&self, e: &str) -> bool { self.elems.get(e).map_or(false, |t| !t.is_empty()) }
+    pub fn members(&self) -> Vec<String> { self.elems.iter().filter(|(_, t)| !t.is_empty()).map(|(k, _)| k.clone()).collect() }
+    pub fn merge(&mut self, o: &ORSet) {
+        for (e, t) in &o.elems { self.elems.entry(e.clone()).or_default().extend(t.iter().cloned()); }
+        for (e, t) in &o.tombs { self.tombs.entry(e.clone()).or_default().extend(t.iter().cloned()); }
+        for (e, tomb) in &self.tombs { if let Some(tags) = self.elems.get_mut(e) { tags.retain(|t| !tomb.contains(t)); } }
     }
-
-    pub fn remove(&mut self, element: &str) {
-        if let Some(tags) = self.elements.remove(element) {
-            self.tombstones
-                .entry(element.to_string())
-                .or_default()
-                .extend(tags);
-        }
-    }
-
-    pub fn contains(&self, element: &str) -> bool {
-        self.elements
-            .get(element)
-            .map(|tags| !tags.is_empty())
-            .unwrap_or(false)
-    }
-
-    pub fn members(&self) -> Vec<String> {
-        self.elements
-            .iter()
-            .filter(|(_, tags)| !tags.is_empty())
-            .map(|(k, _)| k.clone())
-            .collect()
-    }
-
-    pub fn merge(&mut self, other: &ORSet) {
-        for (elem, tags) in &other.elements {
-            let entry = self.elements.entry(elem.clone()).or_default();
-            entry.extend(tags.iter().cloned());
-        }
-        for (elem, tags) in &other.tombstones {
-            let entry = self.tombstones.entry(elem.clone()).or_default();
-            entry.extend(tags.iter().cloned());
-        }
-        // Remove elements whose tags were tombstoned.
-        for (elem, tomb) in &self.tombstones {
-            if let Some(tags) = self.elements.get_mut(elem) {
-                tags.retain(|t| !tomb.contains(t));
-            }
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.elements
-            .values()
-            .map(|tags| tags.len())
-            .sum()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    pub fn len(&self) -> usize { self.elems.values().map(|t| t.len()).sum() }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
-// ---------------------------------------------------------------------------
-// Raft consensus simulation
-// ---------------------------------------------------------------------------
+// -- Raft consensus simulation ---------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum RaftRole {
-    Follower,
-    Candidate,
-    Leader,
-}
+pub enum RaftRole { Follower, Candidate, Leader }
 
 #[derive(Debug, Clone)]
 pub struct RaftSimNode {
-    pub id: String,
-    pub role: RaftRole,
-    pub term: u64,
-    pub log: Vec<(u64, String)>,
-    pub commit_idx: usize,
-    votes_received: HashSet<String>,
-    pub peers: Vec<String>,
+    pub id: String, pub role: RaftRole, pub term: u64,
+    pub log: Vec<(u64, String)>, pub commit_idx: usize,
+    votes: HashSet<String>, pub peers: Vec<String>,
 }
-
 impl RaftSimNode {
     pub fn new(id: &str, peers: Vec<String>) -> Self {
-        Self {
-            id: id.to_string(),
-            role: RaftRole::Follower,
-            term: 0,
-            log: Vec::new(),
-            commit_idx: 0,
-            votes_received: HashSet::new(),
-            peers,
-        }
+        Self { id: id.into(), role: RaftRole::Follower, term: 0, log: vec![],
+               commit_idx: 0, votes: HashSet::new(), peers }
     }
-
-    pub fn start_election(&mut self) {
-        self.role = RaftRole::Candidate;
-        self.term += 1;
-        self.votes_received.clear();
-        self.votes_received.insert(self.id.clone());
+    pub fn start_election(&mut self) { self.role = RaftRole::Candidate; self.term += 1; self.votes.clear(); self.votes.insert(self.id.clone()); }
+    pub fn request_vote(&mut self, _: &str, ct: u64) -> bool {
+        if ct > self.term { self.term = ct; self.role = RaftRole::Follower; true } else { false }
     }
-
-    /// Returns `true` if the vote is granted.
-    pub fn request_vote(&mut self, candidate_id: &str, candidate_term: u64) -> bool {
-        if candidate_term > self.term {
-            self.term = candidate_term;
-            self.role = RaftRole::Follower;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn record_vote(&mut self, voter_id: &str) {
-        self.votes_received.insert(voter_id.to_string());
-    }
-
-    pub fn has_majority(&self) -> bool {
-        let total = self.peers.len() + 1;
-        self.votes_received.len() > total / 2
-    }
-
-    pub fn become_leader(&mut self) {
-        self.role = RaftRole::Leader;
-    }
-
-    pub fn append_entry(&mut self, command: &str) {
-        let idx = self.log.len() as u64 + 1;
-        self.log.push((self.term, command.to_string()));
-        let _ = idx;
-    }
-
-    pub fn commit(&mut self) {
-        self.commit_idx = self.log.len();
-    }
-
-    pub fn apply_log(&self) -> Vec<&str> {
-        self.log[..self.commit_idx]
-            .iter()
-            .map(|(_, cmd)| cmd.as_str())
-            .collect()
-    }
+    pub fn record_vote(&mut self, v: &str) { self.votes.insert(v.into()); }
+    pub fn has_majority(&self) -> bool { self.votes.len() > (self.peers.len() + 1) / 2 }
+    pub fn become_leader(&mut self) { self.role = RaftRole::Leader; }
+    pub fn append_entry(&mut self, cmd: &str) { self.log.push((self.term, cmd.into())); }
+    pub fn commit(&mut self) { self.commit_idx = self.log.len(); }
+    pub fn apply_log(&self) -> Vec<&str> { self.log[..self.commit_idx].iter().map(|(_, c)| c.as_str()).collect() }
 }
 
-// ---------------------------------------------------------------------------
-// Distributed Hash Table
-// ---------------------------------------------------------------------------
+// -- Distributed Hash Table ------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub struct DistributedHashTable {
-    ring: ConsistentHashRing,
-    store: HashMap<String, String>,
-    replication_factor: usize,
-}
-
+pub struct DistributedHashTable { ring: ConsistentHashRing, store: HashMap<String, String>, repl: usize }
 impl DistributedHashTable {
-    pub fn new(replication_factor: usize) -> Self {
-        Self {
-            ring: ConsistentHashRing::new(),
-            store: HashMap::new(),
-            replication_factor: replication_factor.max(1),
-        }
-    }
-
-    pub fn add_node(&mut self, node: &str) {
-        self.ring.add_node(node);
-    }
-
-    pub fn put(&mut self, key: &str, value: &str) -> Vec<String> {
-        let mut nodes = self.get_nodes_for_key(key);
-        // Primary stores the value.
-        if let Some(primary) = nodes.first() {
-            self.store
-                .insert(format!("{}@{}", primary, key), value.to_string());
-        }
+    pub fn new(repl: usize) -> Self { Self { ring: ConsistentHashRing::new(), store: HashMap::new(), repl: repl.max(1) } }
+    pub fn add_node(&mut self, n: &str) { self.ring.add_node(n); }
+    pub fn put(&mut self, key: &str, val: &str) -> Vec<String> {
+        let nodes = self.nodes_for(key);
+        if let Some(p) = nodes.first() { self.store.insert(format!("{}@{}", p, key), val.into()); }
         nodes
     }
-
     pub fn get(&self, key: &str) -> Option<String> {
-        let nodes = self.get_nodes_for_key(key);
-        for node in &nodes {
-            let store_key = format!("{}@{}", node, key);
-            if let Some(val) = self.store.get(&store_key) {
-                return Some(val.clone());
-            }
-        }
+        for n in self.nodes_for(key) { if let Some(v) = self.store.get(&format!("{}@{}", n, key)) { return Some(v.clone()); } }
         None
     }
-
     pub fn delete(&mut self, key: &str) -> bool {
-        let nodes = self.get_nodes_for_key(key);
-        let mut deleted = false;
-        for node in &nodes {
-            let store_key = format!("{}@{}", node, key);
-            if self.store.remove(&store_key).is_some() {
-                deleted = true;
-            }
-        }
-        deleted
+        let mut ok = false;
+        for n in self.nodes_for(key) { if self.store.remove(&format!("{}@{}", n, key)).is_some() { ok = true; } }
+        ok
     }
-
-    fn get_nodes_for_key(&self, key: &str) -> Vec<String> {
-        // Walk the ring starting from the key's position, collecting unique
-        // physical nodes until we reach the replication factor.
-        if self.ring.node_count() == 0 {
-            return Vec::new();
-        }
-        let h = ConsistentHashRing::hash_key(key);
-        let mut result: Vec<String> = Vec::new();
-        let mut seen: HashSet<String> = HashSet::new();
-
-        // Forward iteration from h.
-        for (_, node) in self.ring.ring.range(h..) {
-            if seen.insert(node.clone()) {
-                result.push(node.clone());
-                if result.len() >= self.replication_factor {
-                    return result;
-                }
-            }
-        }
-        // Wrap around.
-        for (_, node) in self.ring.ring.range(..h) {
-            if seen.insert(node.clone()) {
-                result.push(node.clone());
-                if result.len() >= self.replication_factor {
-                    return result;
-                }
-            }
-        }
-        result
+    fn nodes_for(&self, key: &str) -> Vec<String> {
+        if self.ring.node_count() == 0 { return vec![]; }
+        let h = ConsistentHashRing::hash(key);
+        let (mut res, mut seen) = (vec![], HashSet::new());
+        for (_, n) in self.ring.ring.range(h..) { if seen.insert(n.clone()) { res.push(n.clone()); } if res.len() >= self.repl { return res; } }
+        for (_, n) in self.ring.ring.range(..h) { if seen.insert(n.clone()) { res.push(n.clone()); } if res.len() >= self.repl { return res; } }
+        res
     }
-
-    pub fn node_count(&self) -> usize {
-        self.ring.node_count()
-    }
+    pub fn node_count(&self) -> usize { self.ring.node_count() }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// -- Tests -----------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // -- Consistent hashing -------------------------------------------------
-
     #[test]
-    fn test_hash_ring_basic() {
-        let mut ring = ConsistentHashRing::new();
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
-        assert_eq!(ring.node_count(), 3);
-        let node = ring.get_node("some-key").unwrap();
-        assert!(["A", "B", "C"].contains(&node.as_str()));
+    fn consistent_hash_ring_basic() {
+        let mut r = ConsistentHashRing::new();
+        r.add_node("A"); r.add_node("B"); r.add_node("C");
+        assert_eq!(r.node_count(), 3);
+        let n = r.get_node("some-key").unwrap();
+        assert!(["A", "B", "C"].contains(&n.as_str()));
     }
 
     #[test]
-    fn test_hash_ring_remove() {
-        let mut ring = ConsistentHashRing::new();
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.remove_node("A");
-        assert_eq!(ring.node_count(), 1);
-        assert_eq!(ring.get_node("k").unwrap(), "B");
-    }
-
-    // -- Vector clocks ------------------------------------------------------
-
-    #[test]
-    fn test_vector_clock_increment_and_merge() {
-        let mut vc1 = AdvancedVectorClock::new();
-        vc1.increment("A");
-        vc1.increment("A");
-        let mut vc2 = AdvancedVectorClock::new();
-        vc2.increment("B");
-        vc1.merge(&vc2);
-        assert_eq!(vc1.get("A"), 2);
-        assert_eq!(vc1.get("B"), 1);
+    fn consistent_hash_ring_remove() {
+        let mut r = ConsistentHashRing::new();
+        r.add_node("A"); r.add_node("B"); r.remove_node("A");
+        assert_eq!(r.node_count(), 1);
+        assert_eq!(r.get_node("k").unwrap(), "B");
     }
 
     #[test]
-    fn test_vector_clock_happens_before() {
-        let mut vc1 = AdvancedVectorClock::new();
-        vc1.increment("A");
-        let mut vc2 = AdvancedVectorClock::new();
-        vc2.increment("A");
-        vc2.increment("B");
-        assert!(vc1.happens_before(&vc2));
-        assert!(!vc2.happens_before(&vc1));
+    fn vector_clock_increment_merge() {
+        let (mut v1, mut v2) = (AdvancedVectorClock::new(), AdvancedVectorClock::new());
+        v1.increment("A"); v1.increment("A"); v2.increment("B");
+        v1.merge(&v2);
+        assert_eq!(v1.get("A"), 2);
+        assert_eq!(v1.get("B"), 1);
     }
 
     #[test]
-    fn test_vector_clock_concurrent() {
-        let mut vc1 = AdvancedVectorClock::new();
-        vc1.increment("A");
-        let mut vc2 = AdvancedVectorClock::new();
-        vc2.increment("B");
-        assert!(vc1.concurrent_with(&vc2));
+    fn vector_clock_happens_before() {
+        let (mut v1, mut v2) = (AdvancedVectorClock::new(), AdvancedVectorClock::new());
+        v1.increment("A"); v2.increment("A"); v2.increment("B");
+        assert!(v1.happens_before(&v2));
+        assert!(!v2.happens_before(&v1));
     }
 
-    // -- G-Counter ----------------------------------------------------------
+    #[test]
+    fn vector_clock_concurrent() {
+        let (mut v1, mut v2) = (AdvancedVectorClock::new(), AdvancedVectorClock::new());
+        v1.increment("A"); v2.increment("B");
+        assert!(v1.concurrent_with(&v2));
+    }
 
     #[test]
-    fn test_g_counter_merge() {
-        let mut c1 = GCounter::new();
-        c1.increment("A", 3);
-        c1.increment("B", 5);
-        let mut c2 = GCounter::new();
-        c2.increment("A", 7);
-        c2.increment("C", 2);
+    fn g_counter_merge() {
+        let (mut c1, mut c2) = (GCounter::new(), GCounter::new());
+        c1.increment("A", 3); c1.increment("B", 5);
+        c2.increment("A", 7); c2.increment("C", 2);
         c1.merge(&c2);
-        assert_eq!(c1.value(), 7 + 5 + 2);
+        assert_eq!(c1.value(), 14);
     }
 
-    // -- PN-Counter ---------------------------------------------------------
-
     #[test]
-    fn test_pn_counter_increments_decrements() {
+    fn pn_counter_ops() {
         let mut c = PNCounter::new();
-        c.increment("A", 10);
-        c.increment("B", -3);
-        c.increment("A", -2);
+        c.increment("A", 10); c.increment("B", -3); c.increment("A", -2);
         assert_eq!(c.value(), 5);
     }
 
     #[test]
-    fn test_pn_counter_merge() {
-        let mut c1 = PNCounter::new();
-        c1.increment("A", 5);
-        let mut c2 = PNCounter::new();
-        c2.increment("A", -3);
+    fn pn_counter_merge() {
+        let (mut c1, mut c2) = (PNCounter::new(), PNCounter::new());
+        c1.increment("A", 5); c2.increment("A", -3);
         c1.merge(&c2);
         assert_eq!(c1.value(), 2);
     }
 
-    // -- OR-Set -------------------------------------------------------------
-
     #[test]
-    fn test_or_set_add_remove() {
+    fn or_set_add_remove() {
         let mut s = ORSet::new();
-        s.add("x", "t1");
-        s.add("y", "t2");
-        assert!(s.contains("x"));
-        assert_eq!(s.len(), 2);
+        s.add("x", "t1"); s.add("y", "t2");
+        assert!(s.contains("x") && s.len() == 2);
         s.remove("x");
-        assert!(!s.contains("x"));
-        assert_eq!(s.len(), 1);
+        assert!(!s.contains("x") && s.len() == 1);
     }
 
     #[test]
-    fn test_or_set_merge_concurrent_add() {
-        let mut s1 = ORSet::new();
-        s1.add("x", "t1");
-        let mut s2 = ORSet::new();
-        s2.add("x", "t2");
+    fn or_set_concurrent_add_survives() {
+        let (mut s1, mut s2) = (ORSet::new(), ORSet::new());
+        s1.add("x", "t1"); s2.add("x", "t2");
         s1.merge(&s2);
         assert!(s1.contains("x"));
-        assert_eq!(s1.len(), 1);
-        // Both tags survive -- element still present.
     }
 
     #[test]
-    fn test_or_set_merge_remove_survives_concurrent_add() {
-        let mut s1 = ORSet::new();
-        s1.add("x", "t1");
-        let mut s2 = ORSet::new();
-        s2.add("x", "t2");
-        s2.remove("x");
-        s1.merge(&s2);
-        // t1 was not in s2's tombstones, so "x" survives.
-        assert!(s1.contains("x"));
-    }
-
-    // -- Raft simulation ----------------------------------------------------
-
-    #[test]
-    fn test_raft_election() {
-        let mut node = RaftSimNode::new("N1", vec!["N2".into(), "N3".into()]);
-        node.start_election();
-        assert_eq!(node.role, RaftRole::Candidate);
-        assert_eq!(node.term, 1);
-        node.record_vote("N2");
-        assert!(node.has_majority());
-        node.become_leader();
-        assert_eq!(node.role, RaftRole::Leader);
+    fn raft_election_and_log() {
+        let mut n = RaftSimNode::new("N1", vec!["N2".into(), "N3".into()]);
+        n.start_election();
+        assert_eq!(n.role, RaftRole::Candidate);
+        n.record_vote("N2");
+        assert!(n.has_majority());
+        n.become_leader();
+        n.append_entry("SET a=1"); n.commit();
+        assert_eq!(n.apply_log(), vec!["SET a=1"]);
     }
 
     #[test]
-    fn test_raft_log_replication() {
-        let mut leader = RaftSimNode::new("L", vec!["F1".into(), "F2".into()]);
-        leader.role = RaftRole::Leader;
-        leader.term = 1;
-        leader.append_entry("SET a=1");
-        leader.append_entry("SET b=2");
-        leader.commit();
-        let applied = leader.apply_log();
-        assert_eq!(applied, vec!["SET a=1", "SET b=2"]);
-    }
-
-    // -- DHT ---------------------------------------------------------------
-
-    #[test]
-    fn test_dht_put_get() {
+    fn dht_put_get_delete() {
         let mut dht = DistributedHashTable::new(1);
-        dht.add_node("N1");
-        dht.add_node("N2");
-        dht.add_node("N3");
+        dht.add_node("N1"); dht.add_node("N2"); dht.add_node("N3");
         dht.put("foo", "bar");
         assert_eq!(dht.get("foo").unwrap(), "bar");
+        assert!(dht.delete("foo"));
+        assert!(dht.get("foo").is_none());
     }
 
     #[test]
-    fn test_dht_delete() {
-        let mut dht = DistributedHashTable::new(1);
-        dht.add_node("N1");
-        dht.put("k", "v");
-        assert!(dht.delete("k"));
-        assert!(dht.get("k").is_none());
-    }
-
-    #[test]
-    fn test_dht_replication() {
+    fn dht_replication() {
         let mut dht = DistributedHashTable::new(2);
-        dht.add_node("A");
-        dht.add_node("B");
-        dht.add_node("C");
+        dht.add_node("A"); dht.add_node("B"); dht.add_node("C");
         let nodes = dht.put("key", "val");
         assert!(nodes.len() <= 2);
-        // Should be retrievable regardless of which replica is queried.
         assert_eq!(dht.get("key").unwrap(), "val");
     }
 }

@@ -93,13 +93,14 @@ impl LearningRateScheduler for CosineAnnealingLR {
 /// Multiplies the learning rate by `gamma` every epoch.
 #[derive(Debug, Clone)]
 pub struct ExponentialLR {
+    initial_lr: f64,
     current_lr: f64,
     gamma: f64,
 }
 
 impl ExponentialLR {
     pub fn new(initial_lr: f64, gamma: f64) -> Self {
-        Self { current_lr: initial_lr, gamma }
+        Self { initial_lr, current_lr: initial_lr, gamma }
     }
 }
 
@@ -114,8 +115,7 @@ impl LearningRateScheduler for ExponentialLR {
     }
 
     fn reset(&mut self) {
-        // Cannot recover initial_lr without storing it; gamma stays.
-        self.current_lr /= self.gamma.powi(0); // no-op, kept for symmetry
+        self.current_lr = self.initial_lr;
     }
 }
 
@@ -539,6 +539,16 @@ mod tests {
         assert!((sched.current_lr() - 0.05).abs() < EPS);
         sched.reset();
         assert!((sched.current_lr() - 0.1).abs() < EPS);
+    }
+
+    #[test]
+    fn test_exponential_lr_reset() {
+        let mut sched = ExponentialLR::new(1.0, 0.9);
+        sched.step();
+        sched.step();
+        assert!((sched.current_lr() - 0.81).abs() < EPS);
+        sched.reset();
+        assert!((sched.current_lr() - 1.0).abs() < EPS);
     }
 
     // -- Task Schedulers ----------------------------------------------------

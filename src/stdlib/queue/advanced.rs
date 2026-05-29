@@ -282,4 +282,47 @@ mod tests {
         mq.purge("a");
         assert_eq!(mq.topic_len("a"), 0);
     }
+
+    #[test]
+    fn binary_heap_min_ordering() {
+        let mut h = BinaryHeap::new(|a: &i32, b: &i32| b.cmp(a));
+        h.push(5); h.push(1); h.push(3);
+        assert_eq!(h.pop(), Some(1));
+        assert_eq!(h.pop(), Some(3));
+        assert_eq!(h.pop(), Some(5));
+    }
+
+    #[test]
+    fn deque_front_back_peek_empty() {
+        let d: Deque<i32> = Deque::new();
+        assert!(d.front().is_none());
+        assert!(d.back().is_none());
+        assert_eq!(d.len(), 0);
+    }
+
+    #[test]
+    fn circular_buffer_single_capacity() {
+        let mut cb = CircularBuffer::new(1);
+        assert!(cb.push(42).is_none());
+        assert!(cb.is_full());
+        assert_eq!(cb.push(99), Some(42));
+        let items: Vec<&i32> = cb.iter().collect();
+        assert_eq!(items, vec![&99]);
+    }
+
+    #[test]
+    fn work_queue_single_item() {
+        let mut wq = WorkQueue::new();
+        wq.enqueue("only", 5);
+        assert_eq!(wq.peek(), Some((&"only", 5)));
+        assert_eq!(wq.dequeue(), Some("only"));
+        assert!(wq.dequeue().is_none());
+    }
+
+    #[test]
+    fn message_queue_peek_unknown_topic() {
+        let mq = SimpleMessageQueue::<i32>::new();
+        assert!(mq.peek("nonexistent").is_none());
+        assert_eq!(mq.topic_len("nonexistent"), 0);
+    }
 }
