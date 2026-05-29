@@ -97,3 +97,7 @@ pub mod contrastive_learning;
 pub mod self_supervised;
 pub mod curriculum_learning;
 pub mod kalman_filter_ext6;
+pub mod imitation_learning;
+pub mod offline_rl;
+pub mod multi_agent;
+pub mod kalman_filter_ext7;
