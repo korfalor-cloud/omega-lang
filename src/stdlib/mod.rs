@@ -93,3 +93,7 @@ pub mod normalizing_flows;
 pub mod meta_learning;
 pub mod federated_learning;
 pub mod kalman_filter_ext5;
+pub mod contrastive_learning;
+pub mod self_supervised;
+pub mod curriculum_learning;
+pub mod kalman_filter_ext6;
