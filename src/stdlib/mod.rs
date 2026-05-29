@@ -66,3 +66,7 @@ pub mod wavelet;
 pub mod markov_chain;
 pub mod control_theory;
 pub mod approximation;
+pub mod kalman;
+pub mod ode;
+pub mod pde;
+pub mod random_process;
