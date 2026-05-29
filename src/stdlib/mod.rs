@@ -89,3 +89,7 @@ pub mod reinforcement_learning;
 pub mod graph_neural;
 pub mod attention_mechanisms;
 pub mod kalman_filter_ext4;
+pub mod normalizing_flows;
+pub mod meta_learning;
+pub mod federated_learning;
+pub mod kalman_filter_ext5;
